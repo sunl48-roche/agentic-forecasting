@@ -29,6 +29,16 @@ To get started with this bootcamp (*Change or modify the following steps based y
 2. *Include setup and installation instructions here. For additional documentation, refer to the `docs/` directory.*
 3. Begin with each topic in the `implementations/` directory, as guided by the README files.
 
+## Code quality
+
+This project uses [uv](https://github.com/astral-sh/uv) for dependency management. After cloning, sync dev dependencies and run the linters with:
+
+```bash
+make dev lint
+```
+
+That runs **Black** (formatting), **isort** (import order), and **mypy** (static typing) against the workspace package. For a quicker check when your environment is already synced, use `make lint`. To apply Black and isort fixes automatically, use `make format`.
+
 ## License
 *Add appropriate LICENSE for this bootcamp in the main directory.*
 This project is licensed under the terms of the [LICENSE](LICENSE.md) file located in the root directory of this repository.
