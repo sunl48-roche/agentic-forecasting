@@ -58,22 +58,39 @@ Predictor → Prediction → Resolution → Score
 
 ### ForecastingTask
 
-A `ForecastingTask` is a Pydantic model that parameterizes the evaluation loop for a specific prediction problem. It is the bridge between the data service and the evaluation harness, and the place where series relationships are declared.
+A `ForecastingTask` is a Pydantic model that defines a prediction *problem*. It says nothing about how a predictor should solve it — which series to fetch, how to handle gaps, what model to use. Those are predictor concerns.
 
 Fields:
 - `task_id` — unique identifier
 - `target_series_id` — the series being forecast (key into `SeriesStore`)
 - `horizon` — number of steps ahead
 - `frequency` — temporal resolution (e.g., `"MS"` for month-start, `"h"` for hourly)
-- `past_covariate_ids` — list of `series_id`s available up to the forecast origin (e.g., related economic indicators)
-- `future_covariate_ids` — list of `series_id`s known into the forecast horizon (e.g., calendar features)
-- `gap_fill_strategy` — how to fill irregular gaps before handing to a numerical model (`"ffill"`, `"interpolate"`, `"none"`); defaults to `"ffill"`
 - `resolution_fn` — how to look up ground truth from `ResolutionStore`; defaults to "observed value at the resolution timestamp"
 - `description` — human-readable description of the task
 
-For backtesting, the harness iterates over historical origins defined by the task. For live evaluation, it waits for the resolution date. The loop is identical.
+For backtesting, the harness iterates over historical origins defined by the task. For live evaluation, it waits for the resolution date. The loop is identical in both modes.
 
-**Series relationships** — `past_covariate_ids` and `future_covariate_ids` are the mechanism for declaring that a set of series are meaningfully related for a given task. This is intentionally task-scoped rather than stored globally: the same series can be a covariate in one task and irrelevant in another. A covariate registry (global declarations of which series are "related") is deferred as an open question.
+### Predictor Responsibilities
+
+Everything about *how* the problem is solved belongs to the `Predictor`:
+
+- **Which series to fetch** — a predictor may request any series from the `DataService` (subject to the cutoff enforced by `CutoffEnforcer`). Covariate selection is a modelling decision, not a task definition.
+- **Gap-filling** — how to handle irregular or missing observations before passing data to a model. A statistical model might forward-fill; a neural model might interpolate; an LLM predictor gets the raw observations. This is declared in the predictor's own configuration, not in the task.
+- **Model selection, prompting, tool use** — all predictor-internal.
+
+This separation means any two predictors — a vanilla ARIMA and a multi-step LLM agent — can be evaluated against the same `ForecastingTask` without the task needing to know anything about either of them. The evaluation loop is:
+
+```
+ForecastingTask  →  defines the question
+Predictor        →  decides how to answer it
+Prediction       →  the answer
+Resolution       →  ground truth
+Score            →  how well the answer matched
+```
+
+### Series Relationships
+
+Which series are meaningfully related (e.g., CPI sub-components, related equity indicators) is captured in **dataset documentation and configuration files**, not in the data service itself. Predictors discover and request related series by consulting that documentation or by their own design. A formal global registry is not needed at the scale we're operating at, and is explicitly deferred.
 
 ### Prediction Payload Types
 
@@ -144,7 +161,7 @@ def fetch() -> pd.DataFrame:
 
 ### Gap-Filling at the Darts Conversion Boundary
 
-The `SeriesStore` representation makes no guarantees about regularity. When a numerical predictor needs a `darts.TimeSeries`, the `ForecastingTask.gap_fill_strategy` is applied at conversion time via `TimeSeries.from_dataframe()`. This is an explicit, documented step — not silent behaviour. LLM-based predictors do not go through this conversion.
+The `SeriesStore` representation makes no guarantees about regularity. When a numerical predictor needs a `darts.TimeSeries`, gap-filling is applied at conversion time via `TimeSeries.from_dataframe()`. The strategy (forward-fill, interpolate, etc.) is declared in the predictor's own configuration — not in the task or the store. This is an explicit, documented step in the predictor, not silent behaviour. LLM-based predictors do not go through this conversion.
 
 ### Information Cutoff Discipline
 
@@ -155,7 +172,6 @@ This is the unifying concept across both time series backtesting and discrete ev
 ### Open Questions
 
 - **Data service update pipeline**: How are updates handled as new data releases come in (e.g., monthly StatCan drops)? Important for the live benchmark extension; needs to be resolved before live evaluation infrastructure is built.
-- **Global covariate / series relationship registry**: `ForecastingTask` handles task-scoped relationships. A global registry declaring which series are structurally related (e.g., CPI sub-components, equity sector groupings) may be needed for discovery and documentation, but is deferred.
 
 ---
 

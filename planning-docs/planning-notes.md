@@ -4,11 +4,20 @@ Key decisions and design refinements; full details in `technical-design.md`.
 
 - **Canonical internal format**: each series stored as a `(timestamp, value, released_at?)` DataFrame; `series_id` is the store key, not a column. `released_at` is optional, defaults to `timestamp` — this handles both official datasets with known release lags and custom bring-your-own datasets with no lag.
 - **Single-value-column convention**: one quantity per series object. Multivariate data = multiple registered series. Series relationships (covariates) are declared in `ForecastingTask`, not in the data format.
-- **`ForecastingTask`**: new Pydantic model that parameterizes the evaluation loop — binds `target_series_id`, `horizon`, `frequency`, `past_covariate_ids`, `future_covariate_ids`, `gap_fill_strategy`, and `resolution_fn`. This is how series relationships and covariate structure are captured.
-- **Gap-filling at conversion boundary**: `SeriesStore` makes no regularity guarantees. Gap-filling (ffill, interpolate, etc.) is an explicit step when converting to `darts.TimeSeries`, governed by `ForecastingTask.gap_fill_strategy`. LLM predictors skip this entirely.
+- **`ForecastingTask`**: new Pydantic model that parameterizes the evaluation loop — binds `target_series_id`, `horizon`, `frequency`, `past_covariate_ids`, `future_covariate_ids`, `gap_fill_strategy`, and `resolution_fn`. This is how series relationships and covariate structure are captured. It should be easy for users to create variants of these.
+- **Gap-filling at conversion boundary**: `SeriesStore` makes no regularity guarantees. Gap-filling (ffill, interpolate, etc.) is an explicit step when converting to `darts.TimeSeries`, governed by `ForecastingTask.gap_fill_strategy` (or this could be method dependent and up to the user). LLM predictors may skip this entirely.
 - **Adapter protocol**: `BaseAdapter` requires one method — `fetch() -> pd.DataFrame`. `LocalCSVAdapter` is the first-class path for custom datasets, requiring only column-name mappings.
 - **Series relationships open question**: task-scoped covariate declarations via `ForecastingTask` handle the immediate need. A global covariate/series relationship registry (for discovery across tasks) is deferred.
 - **Long-term vision confirmed**: the project should serve both the bootcamp (learning + experimentation) and an ongoing forecasting benchmark/competition. The evaluation loop's backtest/live symmetry is the architectural property that makes this feasible.
+
+---
+
+## Mar 31, 2026 — ForecastingTask / Predictor separation (session 4)
+
+- Clarified that `ForecastingTask` defines the *problem* only: `task_id`, `target_series_id`, `horizon`, `frequency`, `resolution_fn`, `description`. It says nothing about how to solve the problem.
+- Covariate selection, gap-fill strategy, and model choice are all `Predictor` responsibilities. A predictor requests whatever series it wants from the `DataService` (subject to cutoff); the task doesn't constrain this.
+- Series relationships (e.g., CPI sub-components) live in dataset documentation and config files — no formal global registry needed at our scale. Explicitly deferred.
+- Removed global covariate registry from open questions in `technical-design.md`.
 
 ---
 
