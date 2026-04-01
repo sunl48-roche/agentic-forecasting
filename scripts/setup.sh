@@ -1,6 +1,6 @@
 #!/bin/bash
+# Run from the repo root. Sets up the workspace venv and launches Jupyter.
 
-cd aieng-template-implementation
 if [ -d ".venv" ]; then
     echo "Virtual environment already exists."
 else
@@ -8,13 +8,12 @@ else
     uv venv .venv
 fi
 
-source .venv/bin/activate
 uv sync --dev
 
 echo "Virtual environment activated and dependencies synced."
 
 # Install Jupyter kernel
-uv run ipython kernel install --user --name=aieng-template-implementation --display-name "AIEng Template Implementation"
+uv run ipython kernel install --user --name=aieng-forecasting --display-name "AIEng Forecasting"
 echo "Jupyter kernel installed."
 
 # Start Jupyter lab
