@@ -38,7 +38,9 @@ Structure:
 aieng-forecasting/aieng/forecasting/
 ├── data/                   # DataService, ForecastContext, SeriesStore, CutoffEnforcer, adapters
 │   └── adapters/           # BaseAdapter, StatCanAdapter, LocalCSVAdapter (future)
-└── evaluation/             # ForecastingTask, Predictor ABC, Prediction types, backtest engine
+└── evaluation/             # ForecastingTask, Predictor ABC, Prediction types, backtest + eval engines
+    ├── backtest.py         # BacktestSpec, BacktestResult, backtest(), shared run_eval_loop + _compute_origins
+    ├── eval.py             # EvalSpec, EvalResult, EvalTracker, EvalBudgetExceededError, evaluate()
     └── predictors/         # ARIMAPredictor (reference baseline)
 ```
 
@@ -79,7 +81,7 @@ Predictor → Prediction → Resolution → Score
 ```
 
 - **Predictor** — model-agnostic; produces a `Prediction` given a question/task and an as-of date
-- **Prediction** — paradigm-specific payload, but shares common metadata: `question_id`, `predictor_id`, `issued_at`, `horizon`
+- **Prediction** — paradigm-specific payload, but shares common metadata: `task_id`, `predictor_id`, `issued_at`, `as_of`, `forecast_date`
 - **ResolutionStore** — pre-populated in backtest mode; fills in asynchronously in live mode
 - **Scorer** — swappable: CRPS for continuous forecasts, Brier score for discrete event
 
@@ -92,7 +94,7 @@ Fields:
 - `target_series_id` — the series being forecast (key into `SeriesStore`)
 - `horizon` — number of steps ahead
 - `frequency` — temporal resolution (e.g., `"MS"` for month-start, `"h"` for hourly)
-- `resolution_fn` — how to look up ground truth from `ResolutionStore`; defaults to "observed value at the resolution timestamp"
+- `resolution_fn` — how to look up ground truth; defaults to `"observed_value_at_resolution_timestamp"`. **Currently a placeholder** — the harness always uses the default strategy regardless of this value. Dispatch on alternative strategies is deferred; the field is defined now so specs carry the intent and no breaking change is required when dispatch is added.
 - `description` — human-readable description of the task
 
 For backtesting, the harness iterates over historical origins defined by the task. For live evaluation, it waits for the resolution date. The loop is identical in both modes.
@@ -205,17 +207,8 @@ class BacktestResult(BaseModel):
     scores: list[float]         # one per forecast origin, same order
     mean_crps: float
     ran_at: datetime
+    skipped_origins: int        # origins skipped due to warmup or missing ground truth
 ```
-
-#### Build sequence for this layer
-
-1. `ContinuousForecast` + `Prediction` models — YAML-serializable, hashable
-2. `Predictor` ABC — `predict(task, context) -> Prediction`
-3. Naive baseline predictor (Darts)
-4. `BacktestSpec` + `BacktestResult` models — interfaces before the engine
-5. `backtest()` function
-6. Reference spec YAML for CPI All-items task
-7. End-to-end run comparing two predictors
 
 ### Eval Mode
 

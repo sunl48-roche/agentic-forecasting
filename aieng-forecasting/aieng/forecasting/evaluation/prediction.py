@@ -24,9 +24,11 @@ class ContinuousForecast(BaseModel):
         Central estimate — typically the median (0.50 quantile) of the
         predictive distribution.
     quantiles : dict[float, float]
-        Mapping from quantile level (in [0, 1]) to forecast value. Must
-        contain at least the standard levels defined in
-        :data:`STANDARD_QUANTILES`, though additional quantiles are allowed.
+        Mapping from quantile level (in [0, 1]) to forecast value. Keys must
+        be strictly in ``(0, 1)``; values are the corresponding forecast
+        values. The standard levels in :data:`STANDARD_QUANTILES` are
+        recommended for compatibility with the CRPS scorer, but any set of
+        quantile keys in range is accepted.
 
     Examples
     --------

@@ -41,12 +41,10 @@ import yaml
 from pydantic import BaseModel, Field, model_validator
 
 from aieng.forecasting.data.service import DataService
-from aieng.forecasting.evaluation.backtest import _run_eval_loop
+from aieng.forecasting.evaluation.backtest import _compute_origins, run_eval_loop
 from aieng.forecasting.evaluation.prediction import Prediction
 from aieng.forecasting.evaluation.predictor import Predictor
 from aieng.forecasting.evaluation.task import ForecastingTask
-
-import pandas as pd
 
 
 # ---------------------------------------------------------------------------
@@ -151,6 +149,7 @@ class EvalSpec(BaseModel):
 
     @model_validator(mode="after")
     def start_before_end(self) -> "EvalSpec":
+        """Validate that start precedes end."""
         if self.start >= self.end:
             raise ValueError(f"start ({self.start}) must be before end ({self.end})")
         return self
@@ -163,9 +162,7 @@ class EvalSpec(BaseModel):
         list[datetime]
             Candidate forecast origin dates, sorted ascending.
         """
-        all_dates = pd.date_range(start=self.start, end=self.end, freq=self.task.frequency)
-        strided = all_dates[:: self.stride]
-        return [ts.to_pydatetime() for ts in strided]
+        return _compute_origins(self.start, self.end, self.task.frequency, self.stride)
 
 
 # ---------------------------------------------------------------------------
@@ -215,6 +212,7 @@ class EvalResult(BaseModel):
 
     @model_validator(mode="after")
     def lengths_match(self) -> "EvalResult":
+        """Validate that predictions and scores have the same length."""
         if len(self.predictions) != len(self.scores):
             raise ValueError(
                 f"predictions ({len(self.predictions)}) and scores ({len(self.scores)}) must have the same length"
@@ -318,7 +316,7 @@ class EvalTracker:
 
 
 # ---------------------------------------------------------------------------
-# evaluate()
+# evaluate() harness
 # ---------------------------------------------------------------------------
 
 
@@ -377,17 +375,16 @@ def evaluate(
     """
     runs_used = tracker.runs_for(spec.spec_id) if tracker is not None else 0
 
-    if tracker is not None and spec.max_runs is not None:
-        if runs_used >= spec.max_runs:
-            raise EvalBudgetExceededError(
-                spec_id=spec.spec_id,
-                runs_used=runs_used,
-                max_runs=spec.max_runs,
-            )
+    if tracker is not None and spec.max_runs is not None and runs_used >= spec.max_runs:
+        raise EvalBudgetExceededError(
+            spec_id=spec.spec_id,
+            runs_used=runs_used,
+            max_runs=spec.max_runs,
+        )
 
     ran_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
 
-    predictions, scores, skipped = _run_eval_loop(
+    predictions, scores, skipped = run_eval_loop(
         predictor=predictor,
         task=spec.task,
         origins=spec.origins(),

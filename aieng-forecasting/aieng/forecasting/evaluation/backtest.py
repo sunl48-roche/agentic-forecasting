@@ -15,6 +15,33 @@ from aieng.forecasting.evaluation.predictor import Predictor
 from aieng.forecasting.evaluation.task import ForecastingTask
 
 
+def _compute_origins(start: datetime, end: datetime, frequency: str, stride: int) -> list[datetime]:
+    """Compute strided forecast origin dates for a spec window.
+
+    Shared by :class:`BacktestSpec` and :class:`~aieng.forecasting.evaluation.eval.EvalSpec`
+    to avoid duplicating the striding logic.
+
+    Parameters
+    ----------
+    start : datetime
+        First candidate origin.
+    end : datetime
+        Last candidate origin (inclusive).
+    frequency : str
+        Pandas offset alias (e.g. ``"MS"``).
+    stride : int
+        Step size between origins in frequency units.
+
+    Returns
+    -------
+    list[datetime]
+        Candidate forecast origin dates, sorted ascending.
+    """
+    all_dates = pd.date_range(start=start, end=end, freq=frequency)
+    strided = all_dates[::stride]
+    return [ts.to_pydatetime() for ts in strided]
+
+
 class BacktestSpec(BaseModel):
     """Specifies when and how often to evaluate a predictor against a task.
 
@@ -91,9 +118,7 @@ class BacktestSpec(BaseModel):
         list[datetime]
             Candidate forecast origin dates, sorted ascending.
         """
-        all_dates = pd.date_range(start=self.start, end=self.end, freq=self.task.frequency)
-        strided = all_dates[:: self.stride]
-        return [ts.to_pydatetime() for ts in strided]
+        return _compute_origins(self.start, self.end, self.task.frequency, self.stride)
 
 
 class BacktestResult(BaseModel):
@@ -203,7 +228,7 @@ def _resolve(
     return float(match["value"].iloc[0])
 
 
-def _run_eval_loop(
+def run_eval_loop(
     predictor: Predictor,
     task: ForecastingTask,
     origins: list[datetime],
@@ -315,7 +340,7 @@ def backtest(
     >>> results = backtest(predictor=ARIMAPredictor(), spec=spec, data_service=svc)
     >>> print(f"Mean CRPS: {results.mean_crps:.4f}")
     """
-    predictions, scores, skipped = _run_eval_loop(
+    predictions, scores, skipped = run_eval_loop(
         predictor=predictor,
         task=spec.task,
         origins=spec.origins(),

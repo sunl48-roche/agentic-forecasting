@@ -1,3 +1,28 @@
+## Apr 3, 2026 (session 4) — Faithfulness review: all TODOs resolved [Agent]
+
+All 11 items from the session 3 audit were fixed in this session. Summary:
+
+**Category A (doc/code inconsistencies):**
+- `technical-design.md` Unified Loop: corrected `question_id` → `task_id`, `horizon` → `forecast_date`, added `as_of`
+- `technical-design.md` `BacktestResult` snippet: added `skipped_origins: int`
+- `arima.py`: replaced deprecated `datetime.utcnow()` with `datetime.now(tz=timezone.utc).replace(tzinfo=None)` (consistent with `backtest.py` and `eval.py`)
+- `task.py` + `technical-design.md`: documented `resolution_fn` explicitly as a placeholder; the harness currently ignores it and always uses the default observed-value strategy
+
+**Category B (stale documentation):**
+- `technical-design.md` package structure: added `eval.py` and `backtest.py` to the diagram
+- `technical-design.md`: removed stale inline "Build sequence for this layer" list from the Backtesting section (the ✅-marked Phase 1 sequence at the bottom is the authoritative tracker)
+- `service.py` docstring example: updated table ID from `18-10-0004-13` → `18-10-0004-11`
+- `ContinuousForecast` docstring: corrected quantile constraint ("keys must be in (0,1); standard levels recommended but not enforced")
+
+**Category C (design debt):**
+- Extracted `_compute_origins()` shared utility to `backtest.py`; both `BacktestSpec.origins()` and `EvalSpec.origins()` now delegate to it (DRY)
+- Renamed `_run_eval_loop` → `run_eval_loop` (dropped private prefix since it intentionally crosses module boundaries into `eval.py`)
+- Removed unused `import pandas as pd` from `eval.py` (pandas was only needed for the now-extracted origins logic)
+
+74 tests, `make lint` clean.
+
+---
+
 ## Apr 3, 2026 (session 3) — Faithfulness review: TODOs from doc/code audit [Agent]
 
 The following items were found during a thorough cross-check of `technical-design.md`,

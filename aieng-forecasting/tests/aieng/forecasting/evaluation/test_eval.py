@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -263,8 +264,6 @@ class TestEvaluateFunction:
         assert tracker.runs_for(spec.spec_id) == 10
 
     def test_evaluate_mean_crps_matches_scores(self) -> None:
-        import numpy as np
-
         svc = _build_data_service()
         result = evaluate(ConstantPredictor(), _make_spec(), svc)
         assert abs(result.mean_crps - float(np.mean(result.scores))) < 1e-10

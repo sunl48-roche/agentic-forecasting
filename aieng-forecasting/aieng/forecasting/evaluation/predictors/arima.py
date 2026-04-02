@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -122,7 +122,7 @@ class ARIMAPredictor(Predictor):
         return Prediction(
             predictor_id=self.predictor_id,
             task_id=task.task_id,
-            issued_at=datetime.utcnow(),
+            issued_at=datetime.now(tz=timezone.utc).replace(tzinfo=None),
             as_of=context.as_of,
             forecast_date=forecast_date,
             payload=payload,
