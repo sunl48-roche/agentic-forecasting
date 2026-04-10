@@ -84,7 +84,7 @@ LLMs are a natural fit for this paradigm. Recent work has shown that LLM ensembl
 
 News and current events are not optional context in this paradigm — they are core inputs to the evidence-gathering loop. This makes discrete event forecasting a particularly direct expression of the bootcamp's focus on economically and socially consequential prediction tasks. It is also the paradigm with the most natural support for explainability: an agent's retrieved sources, reasoning chain, and cited evidence can be fully logged and inspected for properties such as consistency or groundedness.
 
-This approach applies wherever the forecasting task can be expressed as a binary or categorical outcome: earnings surprises, rate decisions, energy price thresholds, trade policy announcements. It is the primary paradigm for the Metaculus track and a natural framing for the finance and economics tracks.
+This approach applies wherever the forecasting task can be expressed as a binary or categorical outcome: earnings surprises, rate decisions, energy price thresholds, trade policy announcements. It is the primary paradigm for the ForecastBench track and a natural framing for the finance and economics tracks.
 
 Schoenegger, P., Tuminauskaite, I., Park, P. S., Bastos, R. V. S., & Tetlock, P. E. (2024). Wisdom of the Silicon Crowd: LLM Ensemble Prediction Capabilities Rival Human Crowd Accuracy. *Science Advances*, 10(45), eadp1528.
 
@@ -112,11 +112,15 @@ Macroeconomic indicators from Statistics Canada (CPI, employment, trade) alongsi
 
 Canadian-listed equities and earnings data sourced via yfinance. This track supports the full range of forecasting paradigms and naturally accommodates both continuous forecasting (price direction, return distribution) and discrete event framing (earnings beats, threshold crossings).
 
-### Metaculus — World Events (Canadian lens)
+### ForecastBench — Discrete Event Forecasting Questions
 
-Binary and categorical forecasting questions from Metaculus, curated with a focus on Canadian economic, energy, and policy outcomes. This track is the primary venue for discrete event forecasting and serves as the connection point to the broader superforecasting literature and ForecastBench evaluation infrastructure.
+ForecastBench is a dynamic, continuously-updated benchmark of real-world forecasting questions sourced from multiple platforms, including Metaculus, FRED, Yahoo Finance, and Rand Forecasting. Historical questions, community resolutions, and even published community predictions are available for direct download under a CC-BY-SA-4.0 license — no outreach or API key required.
 
-Note: We still need to reach out to Metaculus to see what historical data (including resolutions) could be available for our bootcamp and other projects. I think we will explore this type of prediction target and data source as a fast-follow to getting started with economic and markets forecasting.
+**Why ForecastBench over direct Metaculus integration:** ForecastBench provides the breadth of Metaculus questions alongside questions from other platforms in a single, convenient format with well-documented access. It includes historical resolutions and published community predictions, making it substantially more practical than building a direct Metaculus integration for the bootcamp. Direct Metaculus API integration remains a future option but is not needed for a reference experiment.
+
+This track is the primary venue for discrete event forecasting and the connection point to the broader superforecasting literature. Questions can be curated with a focus on Canadian economic, energy, and policy outcomes.
+
+**Decision date:** Apr 10, 2026.
 
 ---
 
@@ -129,7 +133,7 @@ Not every method applies equally well to every dataset. The table below indicate
 | **NYISO** (New York electricity grid) | ✅ | ✅ | ◑ |
 | **Canadian Economic Vitals** (StatCan \+ FRED) | ✅ | ✅ | ◑ |
 | **Equities / Earnings** (yfinance) | ✅ | ✅ | ✅ |
-| **Metaculus** (Canadian-lens world events) | — | — | ✅ |
+| **ForecastBench** (discrete event questions, Canadian lens) | — | — | ✅ |
 
 **Key**
 ✅ Applies naturally to the canonical task
@@ -160,9 +164,9 @@ Not every method applies equally well to every dataset. The table below indicate
 * *LLM Processes:* Forecast price conditioned on earnings transcript sentiment, analyst consensus, and macro context
 * *Discrete Event (✅):* "Will this company beat earnings consensus next quarter?" or "Will this stock be up more than 5% in the 30 days following the earnings release?"
 
-**Metaculus — world events (Canadian lens)**
+**ForecastBench — discrete event questions (Canadian lens)**
 
-* *Discrete Event (✅):* Forecast the probability of binary questions resolving positively — e.g. "Will the Bank of Canada cut rates at its next announcement?" or "Will Canada's unemployment rate exceed 7% by end of Q2?"
+* *Discrete Event (✅):* Forecast the probability of binary questions resolving positively — e.g. "Will the Bank of Canada cut rates at its next announcement?" or "Will Canada's unemployment rate exceed 7% by end of Q2?" Historical ForecastBench questions and resolutions can also be used to backtest discrete event predictors end-to-end without requiring live question access.
 
 ---
 

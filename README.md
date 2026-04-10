@@ -20,7 +20,7 @@ A central objective is empirical comparison across methods on shared, standardiz
 - **FRED** — US and international macroeconomic series
 - **yfinance** — Canadian-listed equities and earnings
 - **NYISO** — New York electricity demand and price
-- **Metaculus** — Binary and categorical forecasting questions with a Canadian focus
+- **ForecastBench** — Discrete event forecasting questions (sourced from Metaculus, FRED, Yahoo Finance, and Rand Forecasting) with historical resolutions and community predictions; CC-BY-SA-4.0
 
 ---
 

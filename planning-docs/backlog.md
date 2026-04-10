@@ -107,7 +107,7 @@ The current evaluation harness only supports `ContinuousForecast`. The project c
 - BoC interest rate decisions: source historical decisions (Bank of Canada publishes these publicly), ingest, define `ForecastingTask` for "Will BoC cut/hold/raise at the next announcement?"
 - Reference spec YAML in `reference_specs/`
 - Demo notebook under `implementations/experiments/boc_rate_decisions/`
-- Document Metaculus API surface (no integration required yet — just document what the integration point would look like)
+- Document the ForecastBench integration point (no integration required yet — just document what the loader interface would look like; see H3)
 
 **Acceptance criteria:**
 - A `NaiveBinaryPredictor` (constant 50%) runs end-to-end and returns a Brier score
@@ -196,14 +196,20 @@ NYISO (New York Independent System Operator) replaces IESO (Ontario electricity)
 
 ---
 
-### H3 — Metaculus API Integration
+### H3 — ForecastBench Integration
 
 **Theme:** Data / Use case
 **Estimated effort:** ~1 week
 **Dependencies:** T4 (binary evaluation harness)
-**Owner:** TBD (requires Metaculus data access — outreach to their team needed first)
+**Owner:** TBD
 
-Integrate directly with Metaculus and/or ForecastBench as a live source of binary forecasting questions. Blocked on data-access outreach. T4's BoC reference experiment provides the binary harness; this task plugs in a live question feed on top of it.
+Integrate ForecastBench as the primary source of discrete event forecasting questions and resolutions. ForecastBench provides direct download access under CC-BY-SA-4.0 — no outreach or API key required. Data includes historical questions, resolutions, and published community predictions from Metaculus, FRED, Yahoo Finance, and Rand Forecasting. T4's BoC reference experiment provides the binary evaluation harness; this task plugs in a curated question set from ForecastBench on top of it.
+
+ForecastBench data is not a time series and does not flow through the `ProviderAdapter` / `SeriesStore` path. Integration will be a separate loader that populates questions and resolutions into the Pass 2 binary evaluation infrastructure.
+
+Direct Metaculus API integration remains a future option (e.g. for live question feeds) but is no longer needed for a reference experiment.
+
+**Decision date:** Apr 10, 2026.
 
 ---
 
@@ -220,6 +226,26 @@ Integrate directly with Metaculus and/or ForecastBench as a live source of binar
 **Dependencies:** T4 (or later)
 
 Wire `EvalTracker` to per-participant identity for the bootcamp leaderboard. The hook (`EvalTracker` path is caller-supplied) is already in place; this task decides on the identity mechanism and writes the wiring. Deferred until bootcamp infrastructure is more defined.
+
+---
+
+### H6 — ForecastBench Historical Predictions: ICL / Fine-Tuning Research
+
+**Theme:** Research / Future work
+**Estimated effort:** TBD (exploratory)
+**Dependencies:** H3 (ForecastBench integration), T4 (binary evaluation harness)
+**Owner:** TBD
+
+ForecastBench publishes historical community predictions alongside questions and resolutions. This opens several research directions not needed for the bootcamp but worth recording now:
+
+- **ICL (in-context learning):** Can a discrete event forecasting agent use published historical predictions and resolutions as few-shot examples to improve its own calibration?
+- **Fine-tuning:** Can fine-tuning on ForecastBench historical prediction data improve base model performance on discrete event tasks?
+- **Hypothesis formation and resolution feedback:** Can an agent learn to form, test, and revise hypotheses by observing past resolution outcomes — i.e. a simulation of the superforecaster update loop?
+- **Backtest-based strategy evaluation:** Can we replay different agent strategies against historical ForecastBench questions to identify which approaches generalize to live questions?
+
+Not in scope for Phase 1. Documented here as a future research agenda that connects to Pass 2 infrastructure and the long-term agentic research direction.
+
+**Decision date:** Apr 10, 2026.
 
 ---
 

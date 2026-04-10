@@ -1,20 +1,27 @@
-Files in `./planning-docs` provide additional context about projects we're working on that use this repo, such as bootcamps, competitions, or other research projects. We can also use files in this directory to store plans, do brainstorming, and otherwise record notes.
+# AGENTS.md
 
-## Key planning-docs files
+## How to use this file
 
-### planning-notes.md
-For quick planning, decision tracking, and making sure we agree on what to work on next. Prepend date-stamped notes / log entries so that the most recent information is at the top.
+Instructions here are **general when possible, specific when needed.** Prefer patterns and principles over static lists — static lists go stale. When something is specific (a command, a maintenance contract, a non-obvious convention), it is specific for a reason.
 
-### backlog.md
-The plain-text task backlog, complementing ClickUp. Holds development tasks with enough detail for new team member handoff — context, scope, acceptance criteria, dependencies, and owner. Tasks are grouped into **Active Sprint** and **Holding Queue**. Update this file when tasks are started, completed, re-scoped, or reprioritized. When a task completes, move it to a `## Completed` section with a brief completion note and date.
+---
 
-### bootcamp-project-charter.md
-The project charter — the agreement between Ethan and the project management office. This describes scope, methods, datasets, and design principles at a program level. Keep it free of implementation and technical architecture details.
+## Project documentation
 
-### technical-design.md
-**The technical source of truth.** Captures all significant architectural decisions, library selections, interface designs, and build plans.
+### planning-docs/
 
-**Maintenance contract (critical):** This document MUST be kept up to date at all times. Any time an architectural decision is made, revised, or reversed — in a coding session, a planning conversation, or a commit — `technical-design.md` must be updated in the same session. Do not let decisions live only in chat logs or planning notes. If you make a technical decision or learn that a prior decision has changed, update this file immediately before moving on.
+`./planning-docs` holds project context, decisions, and task tracking. Files are named for their role — read their names and opening lines to understand what they contain. You will typically find:
+
+- A **planning log** — date-stamped entries, most recent first. Quick context on recent decisions and what to work on next.
+- A **backlog** — sprint tasks and a holding queue with enough detail for handoff. Update when tasks are started, completed, re-scoped, or reprioritized; move completed tasks to a `## Completed` section with a date.
+- A **project charter** — scope, methods, datasets, and design principles at a program level. Keep it free of implementation and technical architecture details.
+- A **technical design document** — see maintenance contract below.
+
+**`technical-design.md` maintenance contract (critical):** This is the technical source of truth. It MUST be kept up to date. Any time an architectural decision is made, revised, or reversed — in a coding session, a planning conversation, or a commit — update this file before moving on. Do not let decisions live only in chat logs or planning notes.
+
+### README files
+
+Search the repo for `README.md` files (excluding `.venv/`) to find all current READMEs. Check them for needed updates whenever a design change is made — datasets, architecture, repo layout, new methods or experiments. READMEs are often the first thing a new contributor reads; keep them accurate.
 
 ---
 

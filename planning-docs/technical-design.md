@@ -343,9 +343,9 @@ Which series are meaningfully related (e.g., CPI sub-components, related equity 
 Two concrete payload types:
 
 - **`ContinuousForecast`** — point forecast + quantiles at standard levels (0.05…0.95), for economic/time series tasks. Designed to be YAML-serializable from day one.
-- **`BinaryForecast`** — probability estimate, for Metaculus-style discrete event questions. (Planned — Pass 2.)
+- **`BinaryForecast`** — probability estimate, for discrete event questions (ForecastBench / Metaculus-style). (Planned — Pass 2.)
 
-We follow existing standards rather than inventing new ones. For discrete event forecasting, we follow Metaculus conventions.
+We follow existing standards rather than inventing new ones. For discrete event forecasting, we follow Metaculus conventions (which ForecastBench is compatible with).
 
 **`ContinuousForecast` fields:**
 - `point_forecast: float` — central estimate (typically the median of the predictive distribution)
@@ -387,11 +387,28 @@ DataService                  # registration + management layer (scripts, noteboo
     ├── LocalCSVAdapter      # first-class path for custom datasets (planned)         │
     ├── StatCanAdapter       # ✅ implemented                                         │
     ├── FREDAdapter          # planned                                                │
-    └── yfinanceAdapter      # planned                                                │
+    ├── yfinanceAdapter      # planned                                                │
+    └── NYISOAdapter         # planned — CSV download, hourly load/price data         │
                                                                                       │
 ForecastContext  ◄────────────────────────────────────────────────────────────────────┘
   (predictor-facing, read-only, cutoff-scoped view — what predictors receive)
 ```
+
+### Finalized Datasets
+
+**Decision date:** Apr 10, 2026.
+
+The following datasets are confirmed for the bootcamp. Access conditions and integration status are captured here as the technical source of truth.
+
+| Dataset | Access Method | License / Conditions | Adapter Status | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| **Statistics Canada** | `stats-can` Python library / SDMX API | Open Government Licence (no conditions) | ✅ `StatCanAdapter` | `released_at` approximated as `timestamp + 21 days` |
+| **FRED** | REST API with key | Attribution required; API key needed | Planned `FREDAdapter` | Used for US and international macro series |
+| **yfinance** | Python SDK | Attribution required; rate-limited | Planned `yfinanceAdapter` | Suitability for bulk backtesting (vs. real-time) still under evaluation |
+| **NYISO** | CSV download | No conditions apparent on data files | Planned `NYISOAdapter` | 5-minute granularity, ~11 load zones; task framing TBD |
+| **ForecastBench** | Direct download (site + GitHub) | CC-BY-SA-4.0 — attribution required | Separate integration (Pass 2) | Supersedes direct Metaculus API integration; includes Metaculus + FRED + Yahoo Finance + Rand questions, historical resolutions, and community predictions |
+
+**ForecastBench note:** ForecastBench data is structured as questions + resolutions + community predictions — not as time series — and is not served through the `ProviderAdapter` / `SeriesStore` path. It will be integrated as part of the Pass 2 discrete event evaluation infrastructure (see H3 in backlog).
 
 ### Canonical Internal Format
 
@@ -451,7 +468,7 @@ A more precise implementation (using StatCan's SDMX release schedule) is deferre
 Shared abstractions are extracted after both passes are working — not designed in advance.
 
 1. **Pass 1 — Economic forecasting** (StatCan, continuous series, `ContinuousForecast` payloads)
-2. **Pass 2 — Metaculus predictions** (binary/categorical, discrete event, `BinaryForecast` payloads)
+2. **Pass 2 — Discrete event forecasting** (binary/categorical, ForecastBench / Metaculus questions, `BinaryForecast` payloads)
 
 ### Phase 1 Build Sequence (Pass 1) — Status
 
@@ -468,7 +485,7 @@ Shared abstractions are extracted after both passes are working — not designed
 11. ✅ `LastValuePredictor` — naive last-value baseline in `implementations/methods/naive.py`; first method in the importable `methods` package; also the annotated `Predictor` interface reference
 12. ✅ Two-predictor comparison in demo notebook — `LastValuePredictor` vs `DartsAutoARIMAPredictor` on `cpi_allitems_12m`, with per-origin CRPS table and comparison chart
 
-**Next:** Pass 2 (Metaculus / `BinaryForecast` / BoC reference experiment); see backlog T4. Also: expand `methods/` with `SeasonalNaivePredictor`, a second Darts model, and a foundation model predictor (T3).
+**Next:** Pass 2 (ForecastBench discrete event questions / `BinaryForecast` / BoC reference experiment); see backlog T4. Also: expand `methods/` with `SeasonalNaivePredictor`, a second Darts model, and a foundation model predictor (T3).
 
 ### Long-Term Vision
 
