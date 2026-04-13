@@ -4,19 +4,18 @@
 
 This document defines the scope, methods, datasets, and design principles for the Agentic Forecasting Bootcamp. It is intended as the central technical reference for the bootcamp. The design choices reflected in this document were all informed by feedback from our industry sponsors via QSM (Quarterly Sponsor Meeting) and IAP (Industry Advisory Panel).
 
-The bootcamp is organized around three distinct approaches to forecasting applied to a focused set of Canadian finance, economics, and energy datasets. These paradigms are not mutually exclusive — the most interesting implementations may combine elements of several — but they represent meaningfully different philosophies about what a forecasting system is and how it works. A central learning objective is to compare these approaches empirically on shared, standardized datasets.
-
+The bootcamp is organized around three distinct approaches to forecasting applied to a focused set of finance, economics, and energy datasets. These paradigms are not mutually exclusive — the most interesting implementations may combine elements of several — but they represent meaningfully different philosophies about what a forecasting system is and how it works. A central learning objective is to compare these approaches empirically on shared, standardized datasets. [Note: the data sets and use cases we plan to support have changed a bit. The focus isn't entirely Canadian. As of now it's looking more like 1) Broad economic data from statcan and FRED, but with Canada-focused reference experiments/use cases such as food CPI prediction and BoC rate prediction 2) financial markets forecasting, e.g. SP500 using data from yfinance as a basis 3) energy demand and prices from NYISO 4) broad prediction questions from ForecastBench. We could update the charter to be more inline with what we're planning to support.]
 ---
 
 ## Domain Focus
 
 The bootcamp concentrates on three interconnected domains of applied forecasting, all with strong Canadian data availability and real-world relevance to sponsor organizations:
 
-* **Finance** — equities, earnings, and foreign exchange (e.g., yfinance, SEDAR+)
-* **Economics** — macroeconomic indicator forecasting (e.g., StatCan, Bank of Canada)
-* **Energy** — electricity demand and price forecasting (e.g., Ontario grid via IESO)
+* **Finance** — equities, earnings, and foreign exchange (e.g., yfinance, SEDAR+) [Note: let's not talk about SEDAR+ anywhere -- let's please remove all refs to it]
+* **Economics** — macroeconomic indicator forecasting (e.g., StatCan, Bank of Canada) 
+* **Energy** — electricity demand and price forecasting (e.g., Ontario grid via IESO) [Note: let's mention NYISO first but keep the Ontario one too, here at least]
 
-Focusing on these domains allows participants to go deeper on techniques rather than wider on coverage. The target datasets are standardized; the forecasting tasks and questions framed against them are not — there are many meaningful ways to frame prediction problems in each domain, and the diversity of task framings is itself a learning objective. Additional data sources (e.g. datasets, APIs, or agentic tools) may be used to provide covariates or context.
+Focusing on these domains allows participants to go deeper on techniques rather than wider on coverage. The target datasets are standardized; the forecasting tasks and questions framed against them are not — there are many meaningful ways to frame prediction problems in each domain, and the diversity of task framings is itself a learning objective. Additional data sources (e.g. datasets, APIs, or agentic tools) may be used to provide covariates or context. [Note: We can simplify this statement... the point is just that these datasets give us a lot to work with, like they are sufficient for us to be able to carve out a lot of interesting experiments and use cases.]
 
 ---
 
@@ -26,7 +25,7 @@ Two design principles apply across all methods and datasets in the bootcamp. The
 
 ### LLM-Assisted Coding and Optimization
 
-Using an LLM to help write, debug, tune, and iterate on any of the three forecasting approaches is not a fourth paradigm — it is a design practice that applies on top of all of them. A well-implemented, AI-assisted statistical or ML model may be a considerably stronger baseline than a hastily-coded one, and exploring this systematically is a legitimate direction in its own right. We will consult with AI Engineering to determine what tools could be available during a bootcamp for AI assisted coding. For example, simply supporting the use of GitHub Copilot via the Coder/VSCode interface or supporing Cursor (which is enabled/possible using the Coder platform), may be good enough.
+Using an LLM to help write, debug, tune, and iterate on any of the three forecasting approaches is not a fourth paradigm — it is a design practice that applies on top of all of them. A well-implemented, AI-assisted statistical or ML model may be a considerably stronger baseline than a hastily-coded one, and exploring this systematically is a legitimate direction in its own right. We will consult with AI Engineering to determine what tools could be available during a bootcamp for AI assisted coding. For example, simply supporting the use of GitHub Copilot via the Coder/VSCode interface or supporing Cursor (which is enabled/possible using the Coder platform), may be good enough. [Note: I don't think we need to mention this here anymore... it would be enough to say that we encourage the use of tools like Cursor or GitHub Co-Pilot in the bootcamp.]
 
 ### Transparency, Interpretability, and Explainability
 
@@ -38,7 +37,7 @@ Three related but distinct lenses apply across all methods. Rather than treating
 
 **Explainability** operates at the level of the forecast consumer. It asks: *can a decision-maker understand and appropriately trust this forecast?* This goes beyond model internals to include written rationales, well-communicated uncertainty, consistency across related predictions, and — for agentic discrete event forecasters — explicit evidence chains and cited sources. Explainability is where forecasting connects to decision-making, and it is the dimension most visible to sponsors and stakeholders.
 
-These three lenses will be applied throughout the bootcamp as we evaluate and compare methods. We do not require that every implementation excel on all three dimensions — the tradeoffs between them are part of what makes the comparison interesting.
+These three lenses will be applied throughout the bootcamp as we evaluate and compare methods. We do not require that every implementation excel on all three dimensions — the tradeoffs between them are part of what makes the comparison interesting. [Note: still good]
 
 ---
 
@@ -53,7 +52,7 @@ The established paradigm: a model is trained on historical data and produces pre
 * **Deep learning models** — LSTM, Temporal Fusion Transformer (Lim et al., 2021), N-BEATS (Oreshkin et al., 2019). Better at learning complex temporal dependencies from large datasets.
 * **Time series foundation models** — pre-trained models such as TimesFM and Chronos that generalize across domains in a zero-shot or few-shot setting. A rapidly developing area as of 2024–2025.
 
-Numerical forecasters serve as the baseline for all tracks. They are the standard against which LLM-based approaches are evaluated, and they are often surprisingly hard to beat — particularly when built and tuned carefully.
+Numerical forecasters serve as the baseline for most tracks. They are the standard against which LLM-based approaches are evaluated, and they are often surprisingly hard to beat — particularly when built and tuned carefully.
 
 ---
 
@@ -87,6 +86,9 @@ News and current events are not optional context in this paradigm — they are c
 This approach applies wherever the forecasting task can be expressed as a binary or categorical outcome: earnings surprises, rate decisions, energy price thresholds, trade policy announcements. It is the primary paradigm for the ForecastBench track and a natural framing for the finance and economics tracks.
 
 Schoenegger, P., Tuminauskaite, I., Park, P. S., Bastos, R. V. S., & Tetlock, P. E. (2024). Wisdom of the Silicon Crowd: LLM Ensemble Prediction Capabilities Rival Human Crowd Accuracy. *Science Advances*, 10(45), eadp1528.
+
+
+[Note: By the end of this section, does it really reflect the picture we're painting in the planning notes? I'm kind of imagining something that, indeed, includes numerical methods and basic LLMPs, but evolving my thinking to see the numerical methods not only as baselines but almost literall as skills that a frontier agentic forecaster could use. There's a bit of a hierarchy forming in my mind where a very powerful forecasting agent might use "all of the above" to do good analysis and forecasting. I just am worried that we're not being very clear about what we're working towards in the charter. We don't need to be verbose or overly complicated, but I think we could do better to paint a picture that's like: these are your baseline methods. they are well established and very powerful, even hard to beat, in many many cases. But as agentic forecasting has started to take off, we want to reconsider the relationship between LLMs and numerical forecasters. the LLMP was one way in which LLMs could be applied to forecasting, but in 2026, we're looking at how modern agents fit in as forecasters. The whole project is set up to be able to 1) compare all of these methods, independently, across several use cases and 2) compare methods that *integrate* these methods with advancing agent capabilities, like coding/skills/tools, agentic memory and learning, and research/information/context retrieval from live information sources. I think this is a much cooler story to tell!]
 
 ---
 
@@ -187,3 +189,6 @@ The following are documented here for continuity but are explicitly deferred bey
 
 * **Live open benchmark** — opening the platform to external participants as a public forecasting competition. The Phase 1 infrastructure is designed to support this; activation is deferred.
 * **Self-adaptive agent research** (ALMA, ADAS/GEPA, LLM Processes evolution) — Phase 2 research agenda, documented separately in the full proposal.
+
+
+[Note: The rest of the charter after the methods section was pretty good -- but please update anything you think is needed.]
