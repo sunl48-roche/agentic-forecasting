@@ -34,7 +34,6 @@ from pathlib import Path
 import pandas as pd
 
 from aieng.forecasting.data.adapters.base import BaseAdapter
-from aieng.forecasting.paths import resolve_under_project_root
 
 
 class FREDAdapter(BaseAdapter):
@@ -89,11 +88,7 @@ class FREDAdapter(BaseAdapter):
     ) -> None:
         self._series_id = series_id
         self._api_key = api_key or os.environ.get("FRED_API_KEY")
-        # Relative cache_dir values are resolved against the project root so
-        # notebooks and scripts work identically regardless of CWD.
-        self._cache_dir = (
-            resolve_under_project_root(cache_dir) if cache_dir is not None else None
-        )
+        self._cache_dir = Path(cache_dir) if cache_dir is not None else None
         self._refresh = refresh
 
     @property
