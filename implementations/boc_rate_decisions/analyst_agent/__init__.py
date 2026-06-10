@@ -5,7 +5,7 @@ convenience factory for the BoC rate-decision reference implementation.
 """
 
 from boc_rate_decisions.analyst_agent.agent import (
-    BoCRateCutPromptBuilder,
+    BoCDecisionPromptBuilder,
     build_boc_agent_predictor,
     build_boc_basic_config,
     build_boc_news_config,
@@ -13,7 +13,7 @@ from boc_rate_decisions.analyst_agent.agent import (
 
 
 __all__ = [
-    "BoCRateCutPromptBuilder",
+    "BoCDecisionPromptBuilder",
     "build_boc_agent_predictor",
     "build_boc_basic_config",
     "build_boc_news_config",

@@ -1,7 +1,8 @@
 """Bank of Canada policy analyst agent configuration and prompt builder.
 
 Provides :class:`~aieng.forecasting.methods.agentic.agent_factory.AgentConfig`
-factories for the BoC rate-cut prediction task:
+factories for the primary BoC 3-way rate-direction prediction task
+(cut / hold / hike at the next fixed announcement date):
 
 1. :func:`build_boc_basic_config` — the quantitative-only analyst: reasons
    from the policy-rate path, past meeting outcomes, and a leak-safe macro
@@ -16,16 +17,22 @@ factories for the BoC rate-cut prediction task:
 
 Also provides:
 
-- :class:`BoCRateCutPromptBuilder` — Pydantic ``BaseModel`` that serialises
-  the task, meeting calendar position, rate path, outcome history, and macro
-  snapshot into a structured JSON payload.
+- :class:`BoCDecisionPromptBuilder` — Pydantic ``BaseModel`` that serialises
+  the task, meeting calendar position, rate path, per-meeting decision
+  history, and macro snapshot into a structured JSON payload.
 - :func:`build_boc_agent_predictor` — convenience factory wiring a config to
   an :class:`~aieng.forecasting.methods.agentic.predictor.AgentPredictor`
-  with the existing
-  :class:`~aieng.forecasting.methods.agentic.outputs.DiscreteAgentForecastOutput`
+  with the
+  :class:`~aieng.forecasting.methods.agentic.outputs.CategoricalAgentForecastOutput`
   schema. The agent's ``reasoning`` / ``key_signals`` output fields are the
   hook for the planned LLM reasoning-alignment evaluation against the Bank's
   own published rationale.
+
+The agent is direction-native: the compact binary rate-cut reference uses the
+frequency baseline, logistic regression, and the binary LLMP recipe, and the
+task-agnostic
+:class:`~aieng.forecasting.methods.agentic.outputs.DiscreteAgentForecastOutput`
+remains available in the core package for naturally binary problems.
 
 Module-level ``__getattr__`` exposes ``root_agent`` lazily so ``adk web`` can
 load this module for interactive (schema-free) use.
@@ -41,7 +48,7 @@ from aieng.forecasting.data.context import ForecastContext
 from aieng.forecasting.evaluation.task import ForecastingTask
 from aieng.forecasting.methods.agentic import (
     AgentPredictor,
-    DiscreteAgentForecastOutput,
+    CategoricalAgentForecastOutput,
     build_adk_agent,
 )
 from aieng.forecasting.methods.agentic.agent_factory import (
@@ -67,15 +74,16 @@ def _build_boc_analyst_instruction() -> str:
     """Build the BoC analyst instruction, embedding the output schema from the class.
 
     Using a function instead of a static string ensures the ``## Output
-    schema`` block is always in sync with ``DiscreteAgentForecastOutput`` —
-    no manual JSON to maintain.
+    schema`` block is always in sync with ``CategoricalAgentForecastOutput``
+    — no manual JSON to maintain.
     """
-    schema = DiscreteAgentForecastOutput.prompt_schema_json()
+    schema = CategoricalAgentForecastOutput.prompt_schema_json(labels=["cut", "hold", "hike"])
     return (
         "## Role\n\n"
         "You are an expert Bank of Canada monetary-policy analyst. You produce a "
-        "calibrated probability that the Bank LOWERS its target for the overnight "
-        "rate at a specific upcoming fixed announcement date, grounded in the "
+        "calibrated probability distribution over what the Bank does to its target "
+        "for the overnight rate at a specific upcoming fixed announcement date — "
+        "CUT (lower), HOLD (unchanged), or HIKE (raise) — grounded in the "
         "policy-rate path, the Bank's 2% CPI inflation target, labour-market and "
         "bond-market conditions, and the Bank's institutional behaviour "
         "(gradualism, data dependence, reluctance to surprise markets).\n\n"
@@ -87,20 +95,24 @@ def _build_boc_analyst_instruction() -> str:
         "day after `as_of`)\n"
         "- `policy_rate`: current target rate and the dated history of past rate "
         "changes\n"
-        "- `meeting_outcomes`: per-meeting history (1 = cut, 0 = hold or hike) "
-        "with the realised base rate\n"
+        "- `meeting_outcomes`: per-meeting decision history (cut / hold / hike) "
+        "with the realised base rates for each outcome\n"
         "- `macro_snapshot`: leak-safe indicators as of the origin (CPI inflation "
         "vs the 2% target, unemployment momentum, 2-year GoC yield vs the policy "
         "rate)\n\n"
         "Rules:\n"
-        "1. `probability` is P(rate CUT at `announcement_date`): a decrease of any "
-        "size. Holds and hikes both count as 'no cut'.\n"
-        "2. Report a CALIBRATED probability, not your confidence in a point view: "
-        "across many questions where you answer 0.7, the event should occur about "
-        "70% of the time. Anchor on the historical base rate, then adjust.\n"
-        "3. Cuts cluster in easing cycles; the macro snapshot tells you whether "
-        "you are in one. The 2-year yield trading well below the policy rate "
-        "means the bond market is pricing cuts.\n"
+        "1. Assign one probability to each of `cut`, `hold`, and `hike` — a move "
+        "of any size counts. The three probabilities must sum to 1.\n"
+        "2. Report CALIBRATED probabilities, not your confidence in a point view: "
+        "across many questions where you assign 0.7 to an outcome, that outcome "
+        "should occur about 70% of the time. Anchor on the historical base rates, "
+        "then adjust.\n"
+        "3. Cuts and hikes cluster into easing and tightening cycles; the macro "
+        "snapshot tells you whether you are in one. The 2-year yield trading well "
+        "below the policy rate means the bond market is pricing cuts; well above "
+        "means it is pricing hikes. Direct cut-to-hike reversals between adjacent "
+        "meetings essentially never happen, so the recent decision history should "
+        "strongly shape which tail outcome is plausible.\n"
         "4. Use ONLY information available on or before `as_of`. Do not use "
         "knowledge of what the Bank actually decided on or after "
         "`announcement_date`, even if you remember it.\n"
@@ -110,9 +122,7 @@ def _build_boc_analyst_instruction() -> str:
         "## Output schema\n\n"
         "Call `set_model_response` with a `json_response` string matching "
         "**exactly**:\n\n"
-        "```json\n" + schema + "\n```\n\n"
-        'For this task, `direction_bias` means the expected policy direction: "down" '
-        'if you expect easing, "up" if tightening, "neutral" for an extended hold.'
+        "```json\n" + schema + "\n```\n"
     )
 
 
@@ -161,12 +171,14 @@ def _rate_change_history(rate_df: pd.DataFrame, max_changes: int = 40) -> list[d
     ]
 
 
-class BoCRateCutPromptBuilder(BaseModel):
-    """Prompt builder for the BoC rate-cut prediction task.
+class BoCDecisionPromptBuilder(BaseModel):
+    """Prompt builder for the BoC 3-way rate-direction prediction task.
 
     Produces a structured JSON payload containing the question, the policy
-    rate path (compressed to change points), the per-meeting outcome history,
-    and a leak-safe macro snapshot (shared with the logistic baseline via
+    rate path (compressed to change points), the per-meeting decision history
+    (serialised as ``cut`` / ``hold`` / ``hike`` labels with per-outcome base
+    rates), and a leak-safe macro snapshot (shared with the logistic baseline
+    via
     :func:`~boc_rate_decisions.predictors.logistic_baseline.build_feature_row`,
     so the agent and the conventional model see exactly the same indicators).
 
@@ -183,8 +195,10 @@ class BoCRateCutPromptBuilder(BaseModel):
         Parameters
         ----------
         task : ForecastingTask
-            The binary rate-cut task — supplies ``task_id``, ``description``,
-            and the single-step horizon used to derive the announcement date.
+            The categorical rate-direction task — supplies ``task_id``,
+            ``description``, the ordered ``categories`` mapping series values
+            to labels, and the single-step horizon used to derive the
+            announcement date.
         context : ForecastContext
             The information state at forecast time (cutoff-enforced).
 
@@ -192,12 +206,21 @@ class BoCRateCutPromptBuilder(BaseModel):
         -------
         str
             JSON-serialised payload for the analyst agent.
+
+        Raises
+        ------
+        ValueError
+            If the task does not declare categories or an observed outcome
+            does not match any declared category value.
         """
+        if task.categories is None:
+            raise ValueError(f"{type(self).__name__} requires a categorical task with declared categories.")
+
         as_of = pd.Timestamp(context.as_of)
         offset = pd.tseries.frequencies.to_offset(task.frequency)
         announcement_date = as_of + offset * task.horizons[0]
 
-        event_df = context.get_series(task.target_series_id)
+        direction_df = context.get_series(task.target_series_id)
         rate_df = context.get_series(TARGET_RATE_SERIES_ID)
         yield_df = context.get_series(BOND_YIELD_2YR_SERIES_ID)
         cpi_df = context.get_series(CPI_SERIES_ID)
@@ -205,11 +228,21 @@ class BoCRateCutPromptBuilder(BaseModel):
 
         features = build_feature_row(as_of, rate_df, yield_df, cpi_df, unemployment_df)
 
-        outcomes = [
-            {"announcement_date": str(pd.Timestamp(ts).date()), "cut": int(v)}
-            for ts, v in zip(event_df["timestamp"], event_df["value"])
-        ]
-        n_cuts = int(event_df["value"].sum())
+        labels_by_value = {category.value: category.label for category in task.categories}
+        outcomes: list[dict[str, object]] = []
+        counts = {category.label: 0 for category in task.categories}
+        for ts, value in zip(direction_df["timestamp"], direction_df["value"]):
+            label = labels_by_value.get(float(value))
+            if label is None:
+                raise ValueError(
+                    f"Observed outcome {float(value)} does not match any task category value "
+                    f"({sorted(labels_by_value)})."
+                )
+            outcomes.append({"announcement_date": str(pd.Timestamp(ts).date()), "decision": label})
+            counts[label] += 1
+
+        n_meetings = len(outcomes)
+        base_rates = {label: round(count / n_meetings, 4) for label, count in counts.items()} if n_meetings else None
 
         payload: dict[str, Any] = {
             "task": {"task_id": task.task_id, "question": task.description},
@@ -221,9 +254,9 @@ class BoCRateCutPromptBuilder(BaseModel):
             },
             "meeting_outcomes": {
                 "history": outcomes,
-                "n_meetings": len(outcomes),
-                "n_cuts": n_cuts,
-                "historical_cut_base_rate": round(n_cuts / len(outcomes), 4) if outcomes else None,
+                "n_meetings": n_meetings,
+                "counts": counts,
+                "historical_base_rates": base_rates,
             },
             "macro_snapshot": features if features is not None else "insufficient history at this origin",
         }
@@ -304,10 +337,11 @@ def build_boc_news_config(
 def build_boc_agent_predictor(config: AgentConfig) -> AgentPredictor:
     """Wrap an :class:`AgentConfig` in an :class:`AgentPredictor`.
 
-    Uses :class:`BoCRateCutPromptBuilder` and the existing
-    :class:`~aieng.forecasting.methods.agentic.outputs.DiscreteAgentForecastOutput`
-    schema, which converts the agent's probability into a single
-    :class:`~aieng.forecasting.evaluation.prediction.BinaryForecast`
+    Uses :class:`BoCDecisionPromptBuilder` and the
+    :class:`~aieng.forecasting.methods.agentic.outputs.CategoricalAgentForecastOutput`
+    schema, which converts the agent's cut/hold/hike distribution into a
+    single
+    :class:`~aieng.forecasting.evaluation.prediction.CategoricalForecast`
     prediction and preserves ``reasoning`` / ``key_signals`` in metadata for
     the planned reasoning-alignment evaluation.
 
@@ -323,8 +357,8 @@ def build_boc_agent_predictor(config: AgentConfig) -> AgentPredictor:
     """
     return AgentPredictor(
         agent_config=config,
-        prompt_builder=BoCRateCutPromptBuilder(),
-        output_schema=DiscreteAgentForecastOutput,
+        prompt_builder=BoCDecisionPromptBuilder(),
+        output_schema=CategoricalAgentForecastOutput,
     )
 
 
