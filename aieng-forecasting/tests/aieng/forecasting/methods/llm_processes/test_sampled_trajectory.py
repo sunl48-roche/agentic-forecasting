@@ -415,4 +415,5 @@ def test_covariates_reach_prompt_and_metadata(svc: DataService, task: Forecastin
     # Covariate block sits between the target history and the forecast instruction.
     assert prompt.index("Covariate:") < prompt.index("Forecast the next")
     assert preds[0].metadata["covariate_series_ids"] == ["cov_a"]
-    assert preds[0].predictor_id == "llmp_sampled_trajectories_cov[gemini-3.1-flash-lite-preview]"
+    from aieng.forecasting.models import LITE_MODEL  # noqa: PLC0415
+    assert preds[0].predictor_id == f"llmp_sampled_trajectories_cov[{LITE_MODEL}]"

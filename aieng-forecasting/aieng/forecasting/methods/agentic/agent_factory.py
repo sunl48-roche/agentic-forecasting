@@ -108,52 +108,43 @@ class ContextRetrievalConfig(BaseModel):
     """Configuration for the web-search context-retrieval tool.
 
     When enabled, :func:`build_adk_agent` attaches a ``search_web``
-    :class:`~google.adk.tools.FunctionTool` to the agent.  The tool calls
-    the Vector proxy with Gemini's ``googleSearch`` server-side extension so
-    the calling agent can retrieve grounded, sourced web context without a
-    direct Gemini API key.
+    :class:`~google.adk.tools.FunctionTool` to the agent backed by the
+    Tavily search API.
 
     Temporal cutoff enforcement is soft (LLM-judgment-based): when
     ``enforce_cutoff`` is ``True`` and the calling agent passes a
-    ``cutoff_date`` to the tool, the inner proxy prompt explicitly asks the
-    model to exclude post-cutoff sources.  This is the same trust model used
-    by the prior Google Search sub-agent — backtest leakage is a
-    pedagogically useful discussion point, not a hard guarantee.
+    ``cutoff_date`` to the tool, the query is augmented with a
+    ``before:<date>`` constraint.  Backtest leakage is a pedagogically
+    useful discussion point, not a hard guarantee.
 
     Attributes
     ----------
     enabled : bool, default=False
         Whether to enable context retrieval. Disabled by default.
-    search_model : str, default=LITE_MODEL (``"gemini-3.1-flash-lite-preview"``)
-        Proxy model used inside the ``search_web`` tool call.  Must be a
-        model that supports the ``googleSearch`` server-side tool extension.
+    tavily_api_key : str | None, default=TAVILY_API_KEY env var
+        API key for the Tavily search API. Falls back to the
+        ``TAVILY_API_KEY`` environment variable when not set explicitly.
     instruction : str
-        System prompt passed to the inner proxy call.  Should describe the
-        search persona and what kind of output to return.  Must be non-empty
-        when ``enabled`` is ``True``.
+        Unused by the Tavily tool directly, kept for config compatibility.
     enforce_cutoff : bool, default=True
-        When ``True``, the ``search_web`` tool appends a cutoff-date
-        constraint to the user prompt whenever ``cutoff_date`` is supplied by
-        the calling agent.  Set to ``False`` for live (non-backtest) agents
+        When ``True``, the ``search_web`` tool appends a ``before:<date>``
+        constraint to the query whenever ``cutoff_date`` is supplied by the
+        calling agent.  Set to ``False`` for live (non-backtest) agents
         where no temporal fence is needed.
-    temperature : float | None, default=None
-        Sampling temperature for the inner search call.
-    max_output_tokens : int | None, default=None
-        Maximum output tokens for the inner search call.
     """
 
     model_config = {"extra": "forbid"}
 
     enabled: bool = False
-    search_model: str = LITE_MODEL
+    tavily_api_key: str | None = Field(
+        default_factory=lambda: os.getenv("TAVILY_API_KEY")
+    )
     instruction: str = (
         "You are a specialized web search assistant.\n\n"
         "Search for information relevant to the query and return a concise, "
         "grounded summary with source URLs."
     )
     enforce_cutoff: bool = True
-    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    max_output_tokens: int | None = Field(default=None, ge=1)
 
 
 class CodeExecutionConfig(BaseModel):
@@ -207,62 +198,43 @@ def _build_automatic_function_calling_config(
     return AutomaticFunctionCallingConfig(disable=True)
 
 
-def _build_search_tool(
-    config: ContextRetrievalConfig,
-    *,
-    proxy_base_url: str,
-    proxy_api_key: str | None,
-) -> Callable[..., Any]:
-    """Return an async ``search_web`` FunctionTool backed by the proxy's googleSearch.
+def _build_search_tool(config: ContextRetrievalConfig) -> Callable[..., Any]:
+    """Return an async ``search_web`` FunctionTool backed by Tavily.
 
     The returned coroutine function is registered as an ADK tool.  It calls
-    the proxy with ``"tools": [{"googleSearch": {}}]`` so the model does
-    server-side grounding and returns a synthesised answer plus source URLs
-    extracted from ``choices[0].provider_specific_fields["grounding_metadata"]``.
+    the Tavily search API and returns a formatted list of results with titles,
+    URLs, and content snippets.
     """
 
     async def search_web(query: str, cutoff_date: str | None = None) -> str:
-        """Search the web and return a grounded summary with source URLs.
+        """Search the web and return relevant results with source URLs.
 
         Args:
             query: What to search for.
-            cutoff_date: ISO date (YYYY-MM-DD). When provided, only include
-                         information published strictly before this date.
+            cutoff_date: ISO date (YYYY-MM-DD). When provided, appends a
+                         ``before:<date>`` constraint to the query.
 
         Returns
         -------
-            A grounded summary of search results, with source URLs appended.
+            Formatted search results with titles, URLs, and content snippets.
         """
-        import litellm  # noqa: PLC0415
+        from tavily import AsyncTavilyClient  # noqa: PLC0415
 
-        user_content = query
-        if cutoff_date and config.enforce_cutoff:
-            user_content += f"\n\nOnly include and cite information published strictly before {cutoff_date}."
-        search_model = config.search_model
-        if not search_model.startswith("openai/"):
-            search_model = f"openai/{search_model}"
-        resp = await litellm.acompletion(
-            model=search_model,
-            api_base=proxy_base_url,
-            api_key=proxy_api_key,
-            messages=[
-                {"role": "system", "content": config.instruction},
-                {"role": "user", "content": user_content},
-            ],
-            tools=[{"googleSearch": {}}],
-            max_tokens=config.max_output_tokens or 4096,
-            temperature=config.temperature or 0.0,
-            timeout=60.0,
+        search_query = (
+            f"{query} before:{cutoff_date}"
+            if cutoff_date and config.enforce_cutoff
+            else query
         )
-        content = resp.choices[0].message.content or ""
-        psf = getattr(resp.choices[0], "provider_specific_fields", {}) or {}
-        gm = psf.get("grounding_metadata") or {}
-        sources: list[str] = [
-            uri for c in gm.get("groundingChunks", []) if (uri := (c.get("web") or {}).get("uri")) is not None
+        client = AsyncTavilyClient(api_key=config.tavily_api_key)
+        response = await client.search(search_query, max_results=5)
+        results = response.get("results", [])
+        if not results:
+            return "No results found."
+        lines = [
+            f"- [{r['title']}]({r['url']}): {r['content']}"
+            for r in results
         ]
-        if sources:
-            content += "\n\nSources:\n" + "\n".join(sources[:5])
-        return content
+        return "\n".join(lines)
 
     return search_web
 
@@ -450,20 +422,40 @@ def build_adk_agent(
     ...     output_schema=ContinuousAgentForecastOutput,
     ... )
     """
-    # Resolve model: wrap bare string in LiteLlm when proxy is configured.
+    # Resolve model: wrap non-native strings in LiteLlm so ADK can route them.
+    # ADK's LlmAgent only understands native Gemini model strings or BaseLlm
+    # instances — any other string must be wrapped.
     model: str | BaseLlm = config.model
     if isinstance(model, str) and config.proxy_base_url:
         from google.adk.models.lite_llm import LiteLlm  # noqa: PLC0415
+        from aieng.forecasting.methods.llm_processes._client import _parse_custom_headers  # noqa: PLC0415
 
-        # Prefix with "openai/" so LiteLLM uses the OpenAI-compatible path.
-        # LiteLLM strips the prefix before sending, so the proxy receives the
-        # bare model name.
-        litellm_model = model if model.startswith("openai/") else f"openai/{model}"
-        model = LiteLlm(
-            model=litellm_model,
-            api_base=config.proxy_base_url,
-            api_key=config.proxy_api_key,
-        )
+        if model.startswith("anthropic/"):
+            # Anthropic provider path via a custom gateway (e.g. build-cli).
+            # Pass Authorization: Bearer alongside x-api-key so the Roche
+            # gateway accepts the request regardless of which auth it checks.
+            extra_hdrs: dict[str, str] = {}
+            if config.proxy_api_key:
+                extra_hdrs["Authorization"] = f"Bearer {config.proxy_api_key}"
+            extra_hdrs.update(_parse_custom_headers(os.environ.get("ANTHROPIC_CUSTOM_HEADERS")))
+            model = LiteLlm(
+                model=model,
+                api_base=config.proxy_base_url,
+                api_key=config.proxy_api_key,
+                extra_headers=extra_hdrs or None,
+            )
+        else:
+            # OpenAI-compatible proxy path (e.g. Vector proxy).
+            # Prefix with "openai/" so LiteLLM routes via the OpenAI-compatible
+            # path; LiteLLM strips the prefix before sending to the proxy.
+            litellm_model = model if model.startswith("openai/") else f"openai/{model}"
+            extra_hdrs = _parse_custom_headers(os.environ.get("ANTHROPIC_CUSTOM_HEADERS"))
+            model = LiteLlm(
+                model=litellm_model,
+                api_base=config.proxy_base_url,
+                api_key=config.proxy_api_key,
+                extra_headers=extra_hdrs or None,
+            )
 
     # Configure tools
     tools: list[Any] = []
@@ -478,14 +470,7 @@ def build_adk_agent(
         )
 
     if config.context_retrieval.enabled:
-        proxy_base_url = config.proxy_base_url or os.getenv("PROXY_BASE_URL") or ""
-        tools.append(
-            _build_search_tool(
-                config.context_retrieval,
-                proxy_base_url=proxy_base_url,
-                proxy_api_key=config.proxy_api_key,
-            )
-        )
+        tools.append(_build_search_tool(config.context_retrieval))
 
     # Load skills
     skills: list[Skill] = []

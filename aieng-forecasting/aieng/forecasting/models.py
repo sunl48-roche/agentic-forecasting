@@ -1,7 +1,8 @@
-"""Canonical proxy model identifiers used across the project.
+"""Canonical model identifiers used across the project.
 
-The bootcamp standardizes on exactly two Vector-proxy models so examples,
-defaults, and notebooks stay consistent for participants:
+The project standardizes on exactly two models so examples, defaults, and
+notebooks stay consistent.  Currently configured for the Roche build-cli AI
+Gateway (Claude models via Anthropic protocol).
 
 - :data:`LITE_MODEL` — the default / lite model. Fast and cheap; used
   everywhere unless a task specifically benefits from the advanced model.
@@ -20,10 +21,10 @@ from __future__ import annotations
 
 
 #: Default / lite model — fast and cheap; the project-wide default.
-LITE_MODEL = "gemini-3.1-flash-lite-preview"
+LITE_MODEL = "anthropic/claude-haiku-4-5-20251001"
 
 #: Advanced model — higher capability; adaptive-agent and production runs.
-ADVANCED_MODEL = "gemini-3.5-flash"
+ADVANCED_MODEL = "anthropic/claude-sonnet-4-6[1m]"
 
 #: Alias for the project-wide default model (the lite model).
 DEFAULT_MODEL = LITE_MODEL

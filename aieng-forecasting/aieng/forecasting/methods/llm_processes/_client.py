@@ -244,6 +244,24 @@ def _extract_json_payload(text: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+def _parse_custom_headers(raw: str | None) -> dict[str, str]:
+    """Parse ``ANTHROPIC_CUSTOM_HEADERS`` format into a dict.
+
+    The env var uses the format ``key: value`` (single header) or
+    ``key1: value1, key2: value2`` (multiple headers).  LiteLLM does not
+    read this env var automatically, so we parse it here and pass it as
+    ``extra_headers`` to every ``acompletion`` call.
+    """
+    if not raw:
+        return {}
+    headers: dict[str, str] = {}
+    for item in raw.split(","):
+        if ":" in item:
+            k, _, v = item.partition(":")
+            headers[k.strip()] = v.strip()
+    return headers
+
+
 async def _one_completion_async(
     *,
     model: str,
@@ -269,11 +287,26 @@ async def _one_completion_async(
     }
     if api_base is not None:
         kwargs["api_base"] = api_base
-        # Prefix the model with "openai/" so LiteLLM routes via the
-        # OpenAI-compatible path.  LiteLLM strips the prefix before sending
-        # the request, so the proxy receives the bare model name as expected.
-        if not model.startswith("openai/"):
-            kwargs["model"] = f"openai/{model}"
+        if model.startswith("anthropic/"):
+            # Anthropic provider path via a custom gateway (e.g. build-cli).
+            # The Anthropic SDK sends x-api-key by default; the Roche gateway
+            # also requires Authorization: Bearer.  Pass both so the gateway
+            # accepts the request regardless of which auth header it checks.
+            extra_headers: dict[str, str] = {}
+            if api_key is not None:
+                extra_headers["Authorization"] = f"Bearer {api_key}"
+            extra_headers.update(_parse_custom_headers(os.environ.get("ANTHROPIC_CUSTOM_HEADERS")))
+            if extra_headers:
+                kwargs["extra_headers"] = extra_headers
+        else:
+            # OpenAI-compatible proxy path (e.g. Vector proxy).
+            # Prefix with "openai/" so LiteLLM routes via the OpenAI-compatible
+            # path.  LiteLLM strips the prefix before sending to the proxy.
+            if not model.startswith("openai/"):
+                kwargs["model"] = f"openai/{model}"
+            custom_headers = _parse_custom_headers(os.environ.get("ANTHROPIC_CUSTOM_HEADERS"))
+            if custom_headers:
+                kwargs["extra_headers"] = custom_headers
     if api_key is not None:
         kwargs["api_key"] = api_key
     if reasoning_effort is not None:

@@ -81,22 +81,46 @@ class TestAgentConfig:
 class TestBuildAdkAgent:
     """build_adk_agent wires output_schema, proxy model, and skills correctly."""
 
-    def test_output_schema_retained_with_skills(self, tmp_path: Path) -> None:
-        """Skills and output_schema can be combined without error."""
+    def test_output_schema_with_skills_registers_shim_on_proxy_path(self, tmp_path: Path) -> None:
+        """Skills + output_schema + proxy: shim registered, schema cleared at ADK level."""
         skill_dir = tmp_path / "test-skill"
         skill_dir.mkdir()
         (skill_dir / "SKILL.md").write_text("---\nname: test-skill\ndescription: test\n---\n", encoding="utf-8")
+        # Default LITE_MODEL is anthropic/ → Anthropic provider path via proxy.
         agent = build_adk_agent(
-            AgentConfig(instruction="Forecast the supplied series.", skills_dirs=[skill_dir]),
+            AgentConfig(
+                instruction="Forecast the supplied series.",
+                skills_dirs=[skill_dir],
+                proxy_base_url="https://proxy.example.com/v1",
+                proxy_api_key="test-key",
+            ),
             output_schema=ContinuousAgentForecastOutput,
         )
 
-        assert agent.output_schema is ContinuousAgentForecastOutput
+        # Proxy set + anthropic model → wrapped in LiteLlm → set_model_response
+        # shim registered and output_schema cleared at ADK level.
+        tool_names = [getattr(t, "name", None) or getattr(t, "__name__", None) for t in agent.tools]
+        assert "set_model_response" in tool_names
+        assert agent.output_schema is None
 
-    def test_string_model_wrapped_in_litellm_when_proxy_set(self) -> None:
-        """A plain model string is wrapped in LiteLlm when proxy_base_url is set."""
+    def test_anthropic_model_wrapped_in_litellm_when_proxy_set(self) -> None:
+        """An anthropic/ model string is wrapped in LiteLlm when proxy_base_url is set."""
         config = AgentConfig(
             instruction="Forecast.",
+            proxy_base_url="https://proxy.example.com/v1",
+            proxy_api_key="test-key",
+        )
+        agent = build_adk_agent(config)
+
+        assert isinstance(agent.model, LiteLlm)
+        # anthropic/ prefix preserved — LiteLLM routes via the Anthropic provider.
+        assert agent.model.model == "anthropic/claude-haiku-4-5-20251001"
+
+    def test_gemini_model_wrapped_with_openai_prefix_when_proxy_set(self) -> None:
+        """A bare Gemini model string is prefixed with openai/ for the proxy path."""
+        config = AgentConfig(
+            instruction="Forecast.",
+            model="gemini-3.1-flash-lite-preview",  # explicit Gemini for OpenAI-proxy path
             proxy_base_url="https://proxy.example.com/v1",
             proxy_api_key="test-key",
         )
@@ -108,13 +132,14 @@ class TestBuildAdkAgent:
         # proxy sees the model name.
         assert agent.model.model == "openai/gemini-3.1-flash-lite-preview"
 
-    def test_string_model_kept_as_string_without_proxy(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Without a proxy URL the model is passed as a plain string to LlmAgent."""
+    def test_gemini_string_kept_as_string_without_proxy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Without a proxy URL a native Gemini string is passed as-is to LlmAgent."""
         monkeypatch.delenv("PROXY_BASE_URL", raising=False)
         monkeypatch.delenv("PROXY_API_KEY", raising=False)
 
         config = AgentConfig(
             instruction="Forecast.",
+            model="gemini-3.1-flash-lite-preview",  # explicit Gemini string
             proxy_base_url=None,
             proxy_api_key=None,
         )
@@ -122,6 +147,25 @@ class TestBuildAdkAgent:
 
         assert isinstance(agent.model, str)
         assert agent.model == "gemini-3.1-flash-lite-preview"
+
+    def test_any_string_kept_as_string_without_proxy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Without a proxy URL any model string is passed as-is (no LiteLlm wrapping)."""
+        monkeypatch.delenv("PROXY_BASE_URL", raising=False)
+        monkeypatch.delenv("PROXY_API_KEY", raising=False)
+
+        config = AgentConfig(
+            instruction="Forecast.",
+            model="anthropic/claude-haiku-4-5-20251001",
+            proxy_base_url=None,
+            proxy_api_key=None,
+        )
+        agent = build_adk_agent(config)
+
+        # Without a proxy the model string is passed through unchanged.
+        # The build-cli use case always sets PROXY_BASE_URL so this path
+        # is not reached in normal operation.
+        assert isinstance(agent.model, str)
+        assert agent.model == "anthropic/claude-haiku-4-5-20251001"
 
     def test_baselm_instance_bypasses_wrapping(self) -> None:
         """A pre-built BaseLlm instance is passed through unchanged."""
@@ -231,9 +275,11 @@ class TestSmrShimRegistration:
         assert agent.output_schema is None
 
     def test_output_schema_retained_on_direct_gemini(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """No proxy (direct Gemini): native output_schema enforcement is preserved."""
+        """No proxy, explicit Gemini string: native output_schema enforcement is preserved."""
         monkeypatch.delenv("PROXY_BASE_URL", raising=False)
-        config = AgentConfig(instruction="Forecast.")  # no proxy_base_url → model stays a plain string
+        # Explicitly use a bare Gemini model — not wrapped in LiteLlm, so ADK
+        # enforces the schema natively and the shim is not needed.
+        config = AgentConfig(instruction="Forecast.", model="gemini-3.1-flash-lite-preview")
         agent = build_adk_agent(config, output_schema=ContinuousAgentForecastOutput)
 
         assert agent.output_schema is ContinuousAgentForecastOutput
@@ -242,19 +288,16 @@ class TestSmrShimRegistration:
 
 
 class TestBuildSearchTool:
-    """_build_search_tool creates a correctly-shaped async FunctionTool."""
+    """_build_search_tool creates a correctly-shaped async Tavily-backed tool."""
 
     def test_returns_callable_with_expected_signature(self) -> None:
         """Returned function is async and accepts query + optional cutoff_date."""
         config = ContextRetrievalConfig(
             enabled=True,
             instruction="You are a search assistant.",
+            tavily_api_key="test-key",
         )
-        tool = _build_search_tool(
-            config,
-            proxy_base_url="https://proxy.example.com/v1",
-            proxy_api_key="test-key",
-        )
+        tool = _build_search_tool(config)
 
         assert callable(tool)
         assert inspect.iscoroutinefunction(tool)
@@ -264,92 +307,81 @@ class TestBuildSearchTool:
         assert sig.parameters["cutoff_date"].default is None
 
     @pytest.mark.asyncio
-    async def test_cutoff_date_appended_when_enforce_cutoff_true(self) -> None:
-        """Cutoff date constraint is added to user prompt when enforce_cutoff=True."""
+    async def test_cutoff_date_appended_to_query_when_enforce_cutoff_true(self) -> None:
+        """Cutoff date is appended to the Tavily query when enforce_cutoff=True."""
         config = ContextRetrievalConfig(
             enabled=True,
             instruction="Search assistant.",
             enforce_cutoff=True,
+            tavily_api_key="test-key",
         )
-        tool = _build_search_tool(
-            config,
-            proxy_base_url="https://proxy.example.com/v1",
-            proxy_api_key="test-key",
-        )
+        tool = _build_search_tool(config)
 
-        captured: list[dict] = []
+        captured_queries: list[str] = []
 
-        async def _fake_acompletion(**kwargs):  # type: ignore[override]
-            captured.append(kwargs)
-            resp = MagicMock()
-            resp.choices[0].message.content = "Result."
-            resp.choices[0].provider_specific_fields = {}
-            return resp
+        async def _fake_search(query: str, **kwargs: object) -> dict:
+            captured_queries.append(query)
+            return {"results": [{"title": "T", "url": "https://example.com", "content": "c"}]}
 
-        with patch("litellm.acompletion", new=AsyncMock(side_effect=_fake_acompletion)):
+        mock_client = MagicMock()
+        mock_client.search = AsyncMock(side_effect=_fake_search)
+
+        with patch("tavily.AsyncTavilyClient", return_value=mock_client):
             await tool(query="WTI price", cutoff_date="2024-01-15")
 
-        assert captured
-        user_msg = next(m for m in captured[0]["messages"] if m["role"] == "user")
-        assert "2024-01-15" in user_msg["content"]
+        assert captured_queries, "Tavily search was not called"
+        assert "2024-01-15" in captured_queries[0]
 
     @pytest.mark.asyncio
     async def test_cutoff_not_appended_when_enforce_cutoff_false(self) -> None:
-        """No cutoff constraint is added when enforce_cutoff=False."""
+        """No cutoff constraint when enforce_cutoff=False."""
         config = ContextRetrievalConfig(
             enabled=True,
             instruction="Search assistant.",
             enforce_cutoff=False,
+            tavily_api_key="test-key",
         )
-        tool = _build_search_tool(
-            config,
-            proxy_base_url="https://proxy.example.com/v1",
-            proxy_api_key="test-key",
-        )
+        tool = _build_search_tool(config)
 
-        captured: list[dict] = []
+        captured_queries: list[str] = []
 
-        async def _fake_acompletion(**kwargs):  # type: ignore[override]
-            captured.append(kwargs)
-            resp = MagicMock()
-            resp.choices[0].message.content = "Result."
-            resp.choices[0].provider_specific_fields = {}
-            return resp
+        async def _fake_search(query: str, **kwargs: object) -> dict:
+            captured_queries.append(query)
+            return {"results": [{"title": "T", "url": "https://example.com", "content": "c"}]}
 
-        with patch("litellm.acompletion", new=AsyncMock(side_effect=_fake_acompletion)):
+        mock_client = MagicMock()
+        mock_client.search = AsyncMock(side_effect=_fake_search)
+
+        with patch("tavily.AsyncTavilyClient", return_value=mock_client):
             await tool(query="WTI price", cutoff_date="2024-01-15")
 
-        user_msg = next(m for m in captured[0]["messages"] if m["role"] == "user")
-        assert "2024-01-15" not in user_msg["content"]
+        assert "2024-01-15" not in captured_queries[0]
 
     @pytest.mark.asyncio
-    async def test_source_urls_appended_from_grounding_metadata(self) -> None:
-        """Source URLs from grounding_metadata are appended to the returned content."""
+    async def test_results_formatted_with_title_url_and_content(self) -> None:
+        """Tavily results are formatted as markdown list items with title, URL, content."""
         config = ContextRetrievalConfig(
             enabled=True,
             instruction="Search assistant.",
+            tavily_api_key="test-key",
         )
-        tool = _build_search_tool(
-            config,
-            proxy_base_url="https://proxy.example.com/v1",
-            proxy_api_key="test-key",
-        )
+        tool = _build_search_tool(config)
 
-        async def _fake_acompletion(**kwargs):  # type: ignore[override]
-            resp = MagicMock()
-            resp.choices[0].message.content = "WTI is at $90."
-            resp.choices[0].provider_specific_fields = {
-                "grounding_metadata": {
-                    "groundingChunks": [
-                        {"web": {"uri": "https://example.com/wti"}},
-                        {"web": {"uri": "https://example.com/opec"}},
-                    ]
-                }
+        async def _fake_search(query: str, **kwargs: object) -> dict:
+            return {
+                "results": [
+                    {"title": "WTI Report", "url": "https://example.com/wti", "content": "Oil at $90."},
+                    {"title": "OPEC News", "url": "https://example.com/opec", "content": "OPEC cuts."},
+                ]
             }
-            return resp
 
-        with patch("litellm.acompletion", new=AsyncMock(side_effect=_fake_acompletion)):
+        mock_client = MagicMock()
+        mock_client.search = AsyncMock(side_effect=_fake_search)
+
+        with patch("tavily.AsyncTavilyClient", return_value=mock_client):
             result = await tool(query="WTI price")
 
         assert "https://example.com/wti" in result
         assert "https://example.com/opec" in result
+        assert "WTI Report" in result
+        assert "OPEC News" in result

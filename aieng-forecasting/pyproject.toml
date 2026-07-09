@@ -30,6 +30,7 @@ agentic = [
     "google-cloud-storage>=2.18,<4",
     "langfuse>=4.5.1",
     "openinference-instrumentation-google-adk>=0.1.11",
+    "tavily-python>=0.5",
 ]
 llm = [
     "langfuse>=4.5.1",
