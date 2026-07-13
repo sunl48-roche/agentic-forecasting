@@ -274,7 +274,6 @@ class WtiAdaptiveForecastPromptBuilder(BaseModel):
 
 def build_wti_adaptive_config(
     model: str = ADVANCED_MODEL,
-    search_model: str = LITE_MODEL,
     max_output_tokens: int = 16_384,
     strategy_dir: Path | None = None,
 ) -> AgentConfig:
@@ -288,11 +287,6 @@ def build_wti_adaptive_config(
     ----------
     model : str
         Model for the top-level analyst agent.
-    search_model : str
-        Model for the context-retrieval (web-search) sub-tool. Defaults to the
-        lite model (``gemini-3.1-flash-lite-preview``) independently of ``model`` (the
-        advanced model) so web search stays cheap while the analyst reasons
-        with more capability.
     max_output_tokens : int, default=16_384
         Maximum tokens per model response. Set above LiteLLM's OpenAI-compatible
         default of 4096 so the agent can write a complete ``run_code`` Python
@@ -323,7 +317,6 @@ def build_wti_adaptive_config(
         context_retrieval=ContextRetrievalConfig(
             enabled=True,
             instruction=_WTI_CONTEXT_RETRIEVAL_INSTRUCTION,
-            search_model=search_model,
         ),
         code_execution=CodeExecutionConfig(enabled=True),
         skills_dirs=[

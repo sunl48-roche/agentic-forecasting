@@ -295,9 +295,8 @@ def build_boc_basic_config(model: str = LITE_MODEL) -> AgentConfig:
 
 def build_boc_news_config(
     model: str = LITE_MODEL,
-    search_model: str = LITE_MODEL,
 ) -> AgentConfig:
-    """Build the news-grounded BoC analyst config (bounded Google Search).
+    """Build the news-grounded BoC analyst config (Tavily web search).
 
     Wires a context-retrieval sub-agent that enforces a temporal cutoff on
     every search call. This factory is the seam for the deferred
@@ -309,11 +308,6 @@ def build_boc_news_config(
     ----------
     model : str
         Model for the top-level analyst agent.
-    search_model : str
-        Model for the context-retrieval (web-search) sub-tool. Defaults to
-        the lite model (``gemini-3.1-flash-lite-preview``) independently of ``model`` so
-        that Gemini handles Google Search even when the analyst uses a
-        different provider.
 
     Returns
     -------
@@ -326,7 +320,6 @@ def build_boc_news_config(
         context_retrieval=ContextRetrievalConfig(
             enabled=True,
             instruction=_BOC_CONTEXT_RETRIEVAL_INSTRUCTION,
-            search_model=search_model,
         ),
     )
 

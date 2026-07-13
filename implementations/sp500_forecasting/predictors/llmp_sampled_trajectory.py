@@ -70,7 +70,7 @@ def build_sp500_llmp_sampled_trajectory(
     Parameters
     ----------
     model : str
-        Model identifier. Defaults to the lite model (``gemini-3.1-flash-lite-preview``).
+        Model identifier. Defaults to the lite model (``anthropic/claude-haiku-4-5-20251001``).
     n_samples : int
         Number of trajectory samples to draw per prediction call.
     history_window : int or None
@@ -79,12 +79,10 @@ def build_sp500_llmp_sampled_trajectory(
         When provided, the covariate panel is serialized into the prompt
         (the "with-covariates" variant). ``None`` is the target-only variant.
     reasoning_effort : str or None
-        Provider reasoning budget. ``None`` (default) uses the provider default;
-        the Vector proxy rejects ``'disable'``/``'low'``.
+        Provider reasoning budget. ``None`` (default) uses the provider default.
     max_tokens : int, default=16384
         Per-call output token budget. The generous default prevents truncation
-        on thinking models where thinking tokens consume the same budget via the
-        OpenAI-compatible proxy. The model only generates tokens it needs, so
+        on thinking models. The model only generates tokens it needs, so
         non-thinking models are unaffected in cost.
     variant_tag : str or None
         Override the cache tag suffix.

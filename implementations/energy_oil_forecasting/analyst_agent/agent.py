@@ -358,7 +358,6 @@ def build_wti_basic_config(model: str = LITE_MODEL) -> AgentConfig:
 
 def build_wti_multitask_news_config(
     model: str = LITE_MODEL,
-    search_model: str = LITE_MODEL,
 ) -> AgentConfig:
     """News-grounded config for the one-agent-three-tasks demo (NB3).
 
@@ -369,10 +368,6 @@ def build_wti_multitask_news_config(
     ----------
     model : str
         Model for the top-level analyst agent.
-    search_model : str
-        Model for the context-retrieval (web-search) sub-tool. Defaults to
-        the lite model (``gemini-3.1-flash-lite-preview``) independently of ``model`` so that Gemini
-        handles Google Search even when the analyst uses a different provider.
     """
     return AgentConfig(
         name="wti_analyst_multitask",
@@ -381,14 +376,12 @@ def build_wti_multitask_news_config(
         context_retrieval=ContextRetrievalConfig(
             enabled=True,
             instruction=_WTI_CONTEXT_RETRIEVAL_INSTRUCTION,
-            search_model=search_model,
         ),
     )
 
 
 def build_wti_news_config(
     model: str = LITE_MODEL,
-    search_model: str = LITE_MODEL,
 ) -> AgentConfig:
     """Build an :class:`AgentConfig` with bounded Google Search.
 
@@ -400,10 +393,6 @@ def build_wti_news_config(
     ----------
     model : str
         Model for the top-level analyst agent.
-    search_model : str
-        Model for the context-retrieval (web-search) sub-tool. Defaults to
-        the lite model (``gemini-3.1-flash-lite-preview``) independently of ``model`` so that Gemini
-        handles Google Search even when the analyst uses a different provider.
 
     Returns
     -------
@@ -416,14 +405,12 @@ def build_wti_news_config(
         context_retrieval=ContextRetrievalConfig(
             enabled=True,
             instruction=_WTI_CONTEXT_RETRIEVAL_INSTRUCTION,
-            search_model=search_model,
         ),
     )
 
 
 def build_wti_code_exec_config(
     model: str = LITE_MODEL,
-    search_model: str = LITE_MODEL,
     max_output_tokens: int = 16_384,
 ) -> AgentConfig:
     """Build an :class:`AgentConfig` with E2B code execution and forecasting skills.
@@ -440,10 +427,6 @@ def build_wti_code_exec_config(
     ----------
     model : str
         Model for the top-level analyst agent.
-    search_model : str
-        Model for the context-retrieval (web-search) sub-tool. Defaults to
-        the lite model (``gemini-3.1-flash-lite-preview``) independently of ``model`` so that Gemini
-        handles Google Search even when the analyst uses a different provider.
     max_output_tokens : int, default=16_384
         Maximum tokens per model response.  The default is set well above
         LiteLLM's OpenAI-compatible endpoint default of 4096, which is not
@@ -462,7 +445,6 @@ def build_wti_code_exec_config(
         context_retrieval=ContextRetrievalConfig(
             enabled=True,
             instruction=_WTI_CONTEXT_RETRIEVAL_INSTRUCTION,
-            search_model=search_model,
         ),
         code_execution=CodeExecutionConfig(enabled=True),
         skills_dirs=[
@@ -474,7 +456,6 @@ def build_wti_code_exec_config(
 
 def build_wti_tool_config(
     model: str = LITE_MODEL,
-    search_model: str = LITE_MODEL,
     *,
     data_service: DataService | None = None,
     num_samples: int = 200,
@@ -493,10 +474,6 @@ def build_wti_tool_config(
     ----------
     model : str
         Model for the top-level analyst agent.
-    search_model : str
-        Model for the context-retrieval (web-search) sub-tool. Defaults to
-        the lite model (``gemini-3.1-flash-lite-preview``) independently of ``model`` so that Gemini
-        handles Google Search even when the analyst uses a different provider.
     data_service : DataService or None
         Pre-populated data service with the WTI series registered. When
         ``None``, one is constructed via
@@ -520,7 +497,6 @@ def build_wti_tool_config(
         context_retrieval=ContextRetrievalConfig(
             enabled=True,
             instruction=_WTI_CONTEXT_RETRIEVAL_INSTRUCTION,
-            search_model=search_model,
         ),
         function_tools=[forecast_tool.as_function_tool()],
     )

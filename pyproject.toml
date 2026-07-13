@@ -37,6 +37,19 @@ dev = [
 [tool.uv]
 default-groups = ["dev"]
 
+# Intel Mac (x86_64) compatibility — see LOCAL_INSTALL.md for rationale.
+# onnxruntime 1.26+ has no x86_64 Mac wheel; force resolution valid on Intel Mac.
+required-environments = [
+    "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
+# numba 0.63+ / llvmlite 0.47+ have no x86_64 Mac wheels; cap them on Intel Mac
+# so the lock resolves to pre-built wheels without needing LLVM installed.
+# numpy 2.4+ breaks numba 0.62 on all platforms (numba's hard ceiling is 2.3).
+constraint-dependencies = [
+    "numba<=0.62.1; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+    "numpy<2.4",
+]
+
 [tool.uv.workspace]
 members = [
   "aieng-forecasting",

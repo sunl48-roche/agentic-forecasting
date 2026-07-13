@@ -244,6 +244,57 @@ def _extract_json_payload(text: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+def _get_anthropic_api_key(fallback: str | None = None) -> str | None:
+    """Return a fresh build-cli token, auto-refreshing when near expiry.
+
+    Reads ``PROXY_API_KEY`` from the environment.  If the value looks like a
+    JWT, decodes the ``exp`` claim without cryptographic verification.  When
+    the token is within 5 minutes of expiry (or already expired), runs
+    ``build-cli auth token`` to refresh it and updates the environment
+    variable in place so subsequent calls see the new value.
+
+    Falls back to ``fallback`` (the value captured at predictor config
+    construction time) only when the env var is unset.
+
+    Non-JWT values (e.g. static API keys) are returned as-is.
+    """
+    import base64
+    import json
+    import shutil
+    import subprocess
+    import time
+
+    key = os.environ.get("PROXY_API_KEY") or fallback
+    if not key:
+        return key
+
+    # Check JWT expiry only when the value has the three-segment JWT shape.
+    parts = key.split(".")
+    if len(parts) == 3:
+        try:
+            padded = parts[1] + "=" * (-len(parts[1]) % 4)
+            payload = json.loads(base64.urlsafe_b64decode(padded))
+            exp = payload.get("exp")
+            if exp and time.time() > exp - 300:  # refresh 5 min before expiry
+                candidates = [
+                    os.path.expanduser("~/.local/bin/build-cli"),
+                    shutil.which("build-cli") or "",
+                ]
+                cli = next((c for c in candidates if os.path.exists(c)), None)
+                if cli:
+                    result = subprocess.run(
+                        [cli, "auth", "token"],
+                        capture_output=True, text=True, timeout=15,
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        key = result.stdout.strip()
+                        os.environ["PROXY_API_KEY"] = key
+        except Exception:  # noqa: BLE001
+            pass  # malformed JWT or subprocess failure — use the key as-is
+
+    return key
+
+
 def _parse_custom_headers(raw: str | None) -> dict[str, str]:
     """Parse ``ANTHROPIC_CUSTOM_HEADERS`` format into a dict.
 
@@ -292,12 +343,19 @@ async def _one_completion_async(
             # The Anthropic SDK sends x-api-key by default; the Roche gateway
             # also requires Authorization: Bearer.  Pass both so the gateway
             # accepts the request regardless of which auth header it checks.
+            #
+            # build-cli tokens are short-lived: read the live env var at call
+            # time rather than relying solely on the value captured at predictor
+            # config construction, which may have expired during a long backtest.
+            live_key = _get_anthropic_api_key(fallback=api_key)
             extra_headers: dict[str, str] = {}
-            if api_key is not None:
-                extra_headers["Authorization"] = f"Bearer {api_key}"
+            if live_key:
+                extra_headers["Authorization"] = f"Bearer {live_key}"
             extra_headers.update(_parse_custom_headers(os.environ.get("ANTHROPIC_CUSTOM_HEADERS")))
             if extra_headers:
                 kwargs["extra_headers"] = extra_headers
+            if live_key:
+                kwargs["api_key"] = live_key
         else:
             # OpenAI-compatible proxy path (e.g. Vector proxy).
             # Prefix with "openai/" so LiteLLM routes via the OpenAI-compatible
@@ -307,7 +365,9 @@ async def _one_completion_async(
             custom_headers = _parse_custom_headers(os.environ.get("ANTHROPIC_CUSTOM_HEADERS"))
             if custom_headers:
                 kwargs["extra_headers"] = custom_headers
-    if api_key is not None:
+            if api_key is not None:
+                kwargs["api_key"] = api_key
+    elif api_key is not None:
         kwargs["api_key"] = api_key
     if reasoning_effort is not None:
         # LiteLLM unifies the per-provider reasoning-budget kwargs behind

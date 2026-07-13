@@ -108,7 +108,6 @@ date is specified, never report or speculate about events after it.\
 
 def build_starter_agent_config(
     model: str = LITE_MODEL,
-    search_model: str = LITE_MODEL,
     *,
     enable_search: bool = True,
     enable_code_exec: bool = False,
@@ -119,9 +118,7 @@ def build_starter_agent_config(
     ----------
     model : str
         Model for the analyst agent (default: lite). Pass the advanced model
-        (``"gemini-3.5-flash"``) for higher-quality runs.
-    search_model : str
-        Model for the bounded web-search sub-tool.
+        (``"anthropic/claude-sonnet-4-6[1m]"``) for higher-quality runs.
     enable_search : bool, default=True
         Wire a cutoff-aware ``search_web`` tool and load the
         ``research-playbook`` skill. Proxy-only — no extra API key.
@@ -147,7 +144,6 @@ def build_starter_agent_config(
         ContextRetrievalConfig(
             enabled=True,
             instruction=_CONTEXT_RETRIEVAL_INSTRUCTION,
-            search_model=search_model,
         )
         if enable_search
         else ContextRetrievalConfig()
