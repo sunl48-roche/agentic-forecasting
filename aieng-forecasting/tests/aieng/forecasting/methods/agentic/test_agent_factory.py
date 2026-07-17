@@ -14,6 +14,8 @@ from aieng.forecasting.methods.agentic.agent_factory import (
 )
 from aieng.forecasting.methods.agentic.outputs import ContinuousAgentForecastOutput
 from google.adk.models.lite_llm import LiteLlm
+
+from aieng.forecasting.models import DEFAULT_MODEL
 from pydantic import ValidationError
 
 
@@ -114,7 +116,9 @@ class TestBuildAdkAgent:
 
         assert isinstance(agent.model, LiteLlm)
         # anthropic/ prefix preserved — LiteLLM routes via the Anthropic provider.
-        assert agent.model.model == "anthropic/claude-haiku-4-5-20251001"
+        # Assert against the configured default so a model swap is a one-line change.
+        assert agent.model.model == DEFAULT_MODEL
+        assert agent.model.model.startswith("anthropic/")
 
     def test_gemini_model_wrapped_with_openai_prefix_when_proxy_set(self) -> None:
         """A bare Gemini model string is prefixed with openai/ for the proxy path."""

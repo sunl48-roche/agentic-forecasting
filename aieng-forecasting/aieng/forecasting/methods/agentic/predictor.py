@@ -117,6 +117,18 @@ class ForecastPromptBuilder(Protocol):
         ...
 
 
+class ImageBuilder(Protocol):
+    """Protocol for selecting inline images for a multimodal forecasting turn.
+
+    Returns ``(raw_bytes, mime_type)`` pairs to append to the agent's user turn.
+    Must respect the same information cutoff as the prompt builder — only images
+    available as of ``context.as_of``.
+    """
+
+    def __call__(self, *, task: ForecastingTask, context: ForecastContext) -> list[tuple[bytes, str]]:
+        ...
+
+
 class AgentPredictor(Predictor):
     """Predictor that drives an ADK agent to produce forecasts.
 
@@ -189,6 +201,7 @@ class AgentPredictor(Predictor):
         output_schema: type[AgentForecastOutput],
         enable_langfuse_tracing: bool | None = None,
         runner: AdkTextRunner | None = None,
+        image_builder: "ImageBuilder | None" = None,
     ) -> None:
         """Store the schema, derive the modality, and build or accept a runner."""
         if enable_langfuse_tracing is None:
@@ -201,6 +214,7 @@ class AgentPredictor(Predictor):
                 enable_langfuse_tracing = False
 
         self.prompt_builder = prompt_builder
+        self.image_builder = image_builder
         self.agent_config = agent_config
         self.output_schema: type[AgentForecastOutput] = output_schema
         self.enable_langfuse_tracing = enable_langfuse_tracing
@@ -267,7 +281,8 @@ class AgentPredictor(Predictor):
             validation errors on the agent's JSON are not swallowed.
         """
         prompt = self.prompt_builder(task=task, context=context)
-        output_str = _run_coroutine_sync(self._runner.run_text_async(prompt))
+        images = self.image_builder(task=task, context=context) if self.image_builder else None
+        output_str = _run_coroutine_sync(self._runner.run_text_async(prompt, images=images))
 
         # Normalise: strip markdown fences before validation so any model can
         # be swapped in without breaking the parse layer.

@@ -226,6 +226,7 @@ class AdkTextRunner:
         self,
         prompt: str,
         *,
+        images: list[tuple[bytes, str]] | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
         run_config: RunConfig | None = None,
@@ -236,6 +237,10 @@ class AdkTextRunner:
         ----------
         prompt : str
             The user prompt to run.
+        images : list[tuple[bytes, str]] | None, optional
+            Optional inline images as ``(raw_bytes, mime_type)`` pairs, appended
+            to the user turn after the text (multimodal input). Requires a
+            multimodal model; ignored when empty/``None``.
         user_id : str | None, optional
             The user id to use for the session. If not provided, the default
             user id is used. With Langfuse tracing, must be US-ASCII and ≤ 200
@@ -272,7 +277,10 @@ class AdkTextRunner:
 
         session_id = await self._resolve_session_id(user_id, session_id)
 
-        content = genai_types.Content(role="user", parts=[genai_types.Part(text=prompt)])
+        parts = [genai_types.Part(text=prompt)]
+        for data, mime_type in images or []:
+            parts.append(genai_types.Part(inline_data=genai_types.Blob(mime_type=mime_type, data=data)))
+        content = genai_types.Content(role="user", parts=parts)
 
         async def drain_run() -> str:
             async for event in self._runner.run_async(
